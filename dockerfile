@@ -14,7 +14,7 @@ RUN apt-get update && \
         ca-certificates \
         cmake \
         curl \
-	   default-jdk \
+	default-jdk \
         default-jre\
         gdb \
         git \
