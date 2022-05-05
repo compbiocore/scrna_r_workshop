@@ -58,6 +58,7 @@ RUN apt-get update && \
         unzip \
         vim \
         libpoppler-cpp-dev \
+        wget \
         && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # FFTW, FIt-SNE
@@ -77,6 +78,9 @@ RUN wget http://www.fftw.org/fftw-3.3.8.tar.gz \
 # Install R packages
 RUN R -e "install.packages('BiocManager', dependencies=TRUE, repos='http://cran.rstudio.com/')"
 RUN R -e "install.packages('devtools', dependencies=TRUE, repos='http://cran.rstudio.com/')"
+RUN R -e "devtools::install_github('xzhoulab/iDEA')"
+RUN R -e "BiocManager::install('airpart')"
+RUN R -e "devtools::install_github('lucylgao/clusterpval')"
 
 COPY ./packages.R /home/rstudio
 
