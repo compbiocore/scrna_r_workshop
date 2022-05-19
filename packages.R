@@ -1,6 +1,77 @@
-BiocManager::install(c("multtest","AnnotationHub","biomaRt", "rhdf5", "ensembldb", "SingleCellExperiment", "AUCell", "RcisTarget", "GENIE3", "zoo", "mixtools", "rbokeh", "DT", "NMF", "ComplexHeatmap", "R2HTML", "Rtsne", "doMC", "doRNG", "BiocGenerics", "DelayedArray", "DelayedMatrixStats", "limma", "S4Vectors", "SummarizedExperiment", "batchelor", "Matrix.utils", "TFBSTools", "JASPAR2018", "scater"))
+install.packages(c(
+"arrow",
+"BiocManager",
+"deldir",
+"devtools",
+"doMC",
+"doRNG",
+"DT",
+"GGally",
+"ggrepel",
+"hdf5r",
+"kableExtra",
+"knitr",
+"maps",
+"Matrix.utils",
+"metap",
+"mixtools",
+"NMF",
+"openxlsx",
+"parallel",
+"patchwork",
+"pdftools",
+"pheatmap",
+"plotly",
+"PoiClaClu",
+"R2HTML",
+"RColorBrewer",
+"RcppArmadillo",
+"rsvd",
+"Rtsne",
+"S4Vectors",
+"sctransform",
+"Seurat",
+"Signac",
+"stringr",
+"tidyverse",
+"viridis",
+"zoo"),
+ repos = "http://cran.rstudio.com/",
+ dependencies = TRUE)
 
-install.packages(c("metap","arrow", "RcppArmadillo", "deldir", "Seurat", "Signac","hdf5r", "patchwork","tidyverse", "ggrepel","sctransform", "remotes", "knitr", "kableExtra", "stringr", "plotly","viridis", "parallel", "pdftools", "openxlsx"), repos = "http://cran.rstudio.com/")
+BiocManager::install(c(
+"airpart",
+"airway",
+"AnnotationHub",
+"AUCell",
+"batchelor",
+"BiocGenerics",
+"biomaRt",
+"BSgenome",
+"BSgenome.Hsapiens.UCSC.hg19",
+"clusterProfiler",
+"ComplexHeatmap",
+"DelayedArray",
+"DelayedMatrixStats",
+"DESeq2",
+"DOSE",
+"ensembldb",
+"GENIE3",
+"GenomicFeatures",
+"GenomeInfoDb",
+"glmGamPoi",
+"enrichplot",
+"JASPAR2018",
+"limma",
+"MAST",
+"multtest",
+"RcisTarget",
+"rhdf5",
+"scater",
+"SingleCellExperiment",
+"SummarizedExperiment",
+"TFBSTools",
+"vsn"))
 
 devtools::install_github("immunogenomics/harmony")
 devtools::install_github("aertslab/SCopeLoomR")
@@ -10,3 +81,5 @@ devtools::install_github("cole-trapnell-lab/monocle3")
 devtools::install_github("mojaveazure/loomR")
 devtools::install_github("mojaveazure/seurat-disk")
 devtools::install_github("satijalab/seurat-data")
+devtools::install_github("xzhoulab/iDEA")
+devtools::install_github("lucylgao/clusterpval")
