@@ -1,0 +1,143 @@
+# Advanced Topics in scRNAseq 
+
+What we'll cover:
+    - Working with multimodal data
+    - Controlling for Type I error in estimated clusters with clusterpval
+    - Classifying cell types with a reference atlas with TransferAnchors from Seurat    
+    - Gene set enrichment analysis with fgsea
+    - Joint estimation of differential expression and gene set enrichment with iDEA
+
+## Multimodal data
+
+Multimodal assays allow simultaneous measurements of multiple types of information from a given cell. This is a quickly evolving field and there are many library types and applications, including CITE-seq to profile cell surface protein and gene expression levels (https://www.nature.com/articles/nmeth.4380). "CITE-seq uses DNA-barcoded antibodies to convert detection of proteins into a quantitative, sequenceable readout. Antibody-bound oligos act as synthetic transcripts that are captured during most large-scale oligodT-based scRNA-seq library preparation protocols (e.g. 10x Genomics, Drop-seq, ddSeq)" (https://cite-seq.com/). 
+
+First, load libraries:
+```{r}
+.libPaths(c('/usr/local/lib/R/site-library', '/usr/local/lib/R/library', '/tmp/RtmpTPz6Xo/downloaded_packages'))
+set.seed(61)
+options(future.globals.maxSize = 4000 * 1024^5)
+library(RColorBrewer)
+library(Seurat)
+library(patchwork)
+library(ggplot2)
+library(dplyr)
+library(hdf5r)
+library(stringr)
+library(biomaRt)
+library(kableExtra)
+library(knitr)
+library(pdftools)
+library(viridis)
+library(openxlsx)
+library(SeuratDisk)
+library(SeuratData)
+library(ComplexHeatmap)
+library(plotly)
+library(iDEA)
+#library(fgsea)
+library(clusterpval)
+```
+
+```{r "multimodal things go here"}
+
+```
+
+In the first part of this workshop, we discussed a typical approach to differential expression in scRNAseq analysis. First, cells are grouped into clusters based on their gene expression. Secondly, we test for differential gene expression across those clusters of cells. This is 'double dipping':
+
+"Double dipping - generating a hypothesis based on your data, and then testing the hypothesis on that same data - causes classical hypothesis tests like the t-test, Z-test (a.k.a. the Wald test), and the Wilcoxon test not to control the Type I error rate." - https://www.lucylgao.com/clusterpval/
+
+```{r}
+data_dir <- '/gpfs/data/cbc/scrna_r_workshop'
+pbmc.1k <- Read10X_h5(paste0(data_dir, '/data/pbmc_1k_v3_filtered_feature_bc_matrix.h5'))
+pbmc.5k <- Read10X_h5(paste0(data_dir, '/data/5k_pbmc_v3_filtered_feature_bc_matrix.h5'))
+pbmc.1k <- CreateSeuratObject(counts = pbmc.1k, project = 'pbmc.1k')
+pbmc.5k <- CreateSeuratObject(counts = pbmc.5k, project = 'pbmc.5k')
+
+all_data <- merge(x = pbmc.1k, y = c(pbmc.5k), project = 'pbmc')
+all_data[["percent.mt"]] <- PercentageFeatureSet(all_data, pattern = "^MT-")
+all_data_sub <- subset(all_data, subset = nFeature_RNA > 500 & nFeature_RNA < 6000 & percent.mt < 25)
+all_data_split <- SplitObject(all_data_sub, split.by = 'orig.ident')
+all_data_list <- lapply(all_data_split, function(x) { x <- SCTransform(x,verbose=FALSE)}) # if you run this you might get several iteration limit reached issues
+
+integration_features <- SelectIntegrationFeatures(all_data_list)
+all_data_list <- PrepSCTIntegration(object.list = all_data_list, anchor.features = integration_features)
+all_data_list <- lapply(X = all_data_list, FUN = RunPCA, features = integration_features)
+anchors <- FindIntegrationAnchors(object.list = all_data_list, normalization.method = "SCT", anchor.features = integration_features)
+all_data_integrated <- IntegrateData(anchorset = anchors, normalization.method = "SCT")
+
+#test_hier_clusters_exact()
+#test_clusters_approx()
+```
+
+In addition to clustering, you can use reference-mapping approaches to annotate cell types in a dataset.
+
+In this example, we map our PBMC data to a CITE-seq reference of 162,000 PBMC measured with 228 antibodies (https://www.sciencedirect.com/science/article/pii/S0092867421005833?via%3Dihub). 
+
+
+#https://satijalab.org/seurat/articles/multimodal_reference_mapping.html
+#wget https://atlas.fredhutch.org/data/nygc/multimodal/pbmc_multimodal.h5seurat
+
+Import the PBMC reference:
+
+```{r}
+reference <- LoadH5Seurat(paste0(data_dir,"/data/pbmc_multimodal.h5seurat"))
+```
+
+Loook at the metadata:
+```{r}
+head(reference@meta.data)
+```
+You can see that each cell has an 'orig.ident', which is a combination of 'donor' and 'time'.
+You can also see different 'celltype' columns, where the cell types have been assigned at different levels (e.g., B, B memory, B memory kappa).
+
+Look at the cell types
+```{r}
+DimPlot(object = reference, reduction = "wnn.umap", group.by = "celltype.l1", label = TRUE, label.size = 3, repel = TRUE) + NoLegend()
+DimPlot(object = reference, reduction = "wnn.umap", group.by = "celltype.l3", label = TRUE, label.size = 3, repel = TRUE) + NoLegend()
+
+```
+
+We then find anchors between reference and query, the reference object has already been normalized using SCTransform (which we have also used on our query PBMCs):
+The Seurat authors recommend the use of supervised PCA (spca) for CITE-seq datasets, but you can also use a standard PCA transformation.
+
+```{r}
+anchors <- FindTransferAnchors(
+  reference = reference,
+  query = all_data_integrated,
+  normalization.method = "SCT",
+  reference.reduction = "spca",
+  dims = 1:50
+)
+
+```
+We then transfer cell type labels and protein data from the reference to the query. Additionally, we project the query data onto the UMAP structure of the reference. MapQuery() is a wrapper around three functions: TransferData(), IntegrateEmbeddings(), and ProjectUMAP(). TransferData() is used to transfer cell type labels and impute the ADT ('antibody derived tag') values. IntegrateEmbeddings() and ProjectUMAP() are used to project the query data onto the UMAP structure of the reference. 
+
+
+```{r}
+all_data_integrated <- MapQuery(
+  anchorset = anchors,
+  query = all_data_integrated,
+  reference = reference,
+  refdata = list(
+    celltype.l1 = "celltype.l1",
+    celltype.l2 = "celltype.l2",
+    predicted_ADT = "ADT"
+  ),
+  reference.reduction = "spca", 
+  reduction.model = "wnn.umap"
+)
+```
+
+The reference-mapped dataset helps us identify cell types. Let's look at  plasmacytoid dendritic cells (pDC) cells:
+
+Each prediction is assigned a score between 0 and 1.
+
+```{r}
+FeaturePlot(all_data_integrated, features ="CD16 Mono",  reduction = "ref.umap", cols = c("lightgrey", "darkred"), ncol = 3) & theme(plot.title = element_text(size = 10))
+```
+
+
+
+
+
+*Gene Set Enrichment Analysis*

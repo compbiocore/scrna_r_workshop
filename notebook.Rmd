@@ -1,5 +1,7 @@
 ```{r}
-.libPaths(c('/usr/local/lib/R/site-library', '/usr/local/lib/R/library', '/tmp/RtmpTPz6Xo/downloaded_packages'))
+.libPaths(c('/usr/local/lib/R/site-library', '/usr/local/lib/R/library'))
+#.libPaths(c('/usr/local/lib/R/site-library', '/usr/local/lib/R/library', '/tmp/RtmpTPz6Xo/downloaded_packages'))
+
 #wget https://cf.10xgenomics.com/samples/cell-exp/3.0.0/neuron_10k_v3/neuron_10k_v3_filtered_feature_bc_matrix.h5
 ```
 
