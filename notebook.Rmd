@@ -1,17 +1,97 @@
-```{r}
-.libPaths(c('/usr/local/lib/R/site-library', '/usr/local/lib/R/library'))
-#.libPaths(c('/usr/local/lib/R/site-library', '/usr/local/lib/R/library', '/tmp/RtmpTPz6Xo/downloaded_packages'))
+# Introduction to scRNA-seq
 
-#wget https://cf.10xgenomics.com/samples/cell-exp/3.0.0/neuron_10k_v3/neuron_10k_v3_filtered_feature_bc_matrix.h5
+**What we will cover**
+- Bulk vs single cell RNAseq
+- Importing your data
+- Working with Seurat objects
+- Data QC and filtering
+- Merging and integrating data
+- SCTransform normalization
+- Differential expression testing
+- Data visualization
+
+Much of this notebook is adapted from the Seurat vignettes https://satijalab.org/seurat and GitHub repository https://github.com/satijalab/seurat
+
+
+### How does scRNA-seq differ from bulk RNA-seq?
+
+![bulk vs single cell](src/bulk_vs_singlecell.png)
+- In bulk RNA-seq you are taking a snapshot of expression of all the cells in a sample and your measurements are aggregated across all of those cells.
+
+- In scRNA-seq, you can get a sense of the heterogeneity of the cells in your sample.
+    - Are there novel or rare cell types?
+    - What about cell type specific gene expression?
+    - Does the distribution of different cell types change across time or treatment?
+- This increased resolution comes with some unique challenges.
+    - Dropouts - genes that are not detected in some cells, can lead to sparse expression matrices with many zero values.
+    - Doublets - sequencing two cells at the same time and can't distinguish their expression or cell types, need to filter these out during QC.
+    - Dying cells - you will lose some cells because they are dead or dying, you can also filter these out during sample QC.
+    - You also should be cautious when thinking about your sample sizes. For example, you may be sequencing thousands of cells but if they all come from the same mouse you lose the ability to generalize your findings.
+   
+### scRNA-seq technologies
+- Although 10X genomics is probably the most popular technology for scRNA-seq, there are other flavors (see PMID 30472192 and PMID 28212749).   
+
+![sc flow](src/10x_flow.png)
+- 10x sequencing encapsulates a cell, reagents, and a bead w/ primer in an oil droplet (aka GEM or Gel Bead-in EMulsion).    
+- If you have a situation where one droplet has two cells, this is a 'doublet'.
+
+
+![sc bead](src/10x_bead.png)
+
+- After encapsulation of cells, beads, and reagents in the oil droplets, the bead is dissolved and releases primers. 
+- The poly (dT) primers are used for generating the gene expression libraries. 
+- The capture sequence primers are shown in a lighter shading because they are only used in situations where you'd like to add an extra channel of information to your experiment by using feature barcoding (cell-surface protein characterization, multiplexing, etc.).
+- https://teichlab.github.io/scg_lib_structs/ is an excellent resource for information about the resulting library structures for 10x libraries (and other single cell technologies like Drop-seq or SMART-seq).
+
+
+### Seurat objects
+- This workshop focuses on using Seurat objects to structure your scRNA-seq data (https://github.com/satijalab/seurat/wiki/Seurat).     
+
+![seurat object](src/seurat_object.png){height=600px width=300px} 
+
+- Each Seurat object is composed of different slots.
+    - **`assays`** is a list of all the assays in the object.
+        - Typically only has the `RNA` assay, but you can add others (like `SCT` shown in the figure above, could also be antibody-derived tags, etc.). 
+        - You can see which assay is the currently active assay by looking in the `active.assay` slot and switch between them using the `DefaultAssay()` function.
+        - Each assay will store multiple transformations of the data in different slots -- in the case of `RNA` data these slots are: 
+            - `@counts` contains the raw counts.
+            - `@data` contains the normalized counts.
+            - `@scale.data` contains the scaled data for dimensional reduction.
+        - The slots store the data as a sparse matrix where the rows are gene and the columns are cells.      
+    - **`meta.data`** is a matrix of all the cell-level metadata.
+        - This will include information about which condition, timepoint, batch, etc. a for a given cell.
+        - It also includes metrics that will be relevant for QC, like `nCount_RNA` and `nFeature_RNA`
+            - `nCount_RNA` is the total number of molecules (UMIs) detected within a cell.
+            - `nFeature_RNA` is the total number of genes detected within a cell.
+        - Once you have completed clustering, you'll also see information about which cluster each cell has been assigned to.
+        - The different categories or columns in the `meta.data` are also called `Idents` in Seurat.
+        - You can see the current `Ident` in the `active.ident` slot and switch between them using the `Idents()` function (this will probably be important for running differential expression testing).
+    - **`graphs`** is a list of the nearest neighbor graphs.
+        - The objects stored in `graphs` are cell x cell matrices containing the neighborhood overlap (Jaccard index) between every cell and its nearest neighbors. 
+    - **`reductions`** is a list of `DimReduc` objects.
+    - **`version`** contains information about which version of Seurat was used to make the object.
+    - There are other optional slots, including **`tools`** and **`misc`** that can be populated by specific analysis tools (`tools`) or users can store their own additional information (`misc`).
+    
+**Much of this notebook is taken from the various Seurat vignettes: https://satijalab.org/seurat/articles/get_started.html**
+
+
+Let's get started. First, we'll need to set the `.libPaths()` since we are using a Singularity container.
+
+```{r "set lib paths"}
+.libPaths(c('/usr/local/lib/R/site-library', '/usr/local/lib/R/library'))
 ```
 
-#Much of this notebook is taken from the various Seurat vignettes: https://satijalab.org/seurat/articles/get_started.html
-#Set a seed at the start of the notebook
-#We also set future.globals.maxSize, see this link for discussion about why we do that (basically we might be exceeding the allowed global variable size so we make them bigger) https://satijalab.org/seurat/archive/v3.0/future_vignette.html
+- We'll also set a seed at the start of the notebook so that we can reproduce our results if we decide to re-run this notebook at some future date.   
+- We also set `future.globals.maxSize`, see this link for discussion about why we do that (basically we might be exceeding the allowed global variable size so we make them bigger) https://satijalab.org/seurat/archive/v3.0/future_vignette.html
 
 ```{r "setup"}
 set.seed(61)
 options(future.globals.maxSize = 4000 * 1024^5)
+```
+
+- Then we load all the libraries we need:
+```{r "setup"}
+
 library(RColorBrewer)
 library(Seurat)
 library(patchwork)
@@ -20,84 +100,123 @@ library(dplyr)
 library(hdf5r)
 library(stringr)
 library(biomaRt)
-library(kableExtra)
-library(knitr)
-library(pdftools)
 library(viridis)
-library(openxlsx)
 library(SeuratDisk)
 library(SeuratData)
-library(ComplexHeatmap)
-library(plotly)
+library('pbmc3k.SeuratData')
+library('cbmc.SeuratData')
+library('ifnb.SeuratData')
+data("pbmc3k")
+data("cbmc")
+data("ifnb")
+pbmc3k
+cbmc
+ifnb
 ```
 
-```{r "import data"}
-#wget https://cf.10xgenomics.com/samples/cell-exp/3.0.2/5k_pbmc_v3/5k_pbmc_v3_filtered_feature_bc_matrix.h5
-#wget https://cf.10xgenomics.com/samples/cell-exp/3.0.0/pbmc_1k_v3/pbmc_1k_v3_filtered_feature_bc_matrix.h5
 
-#We use Read10X_h5, you could also use `Read10X` and give a path to a folder that contains your matrix, features, and barcode tsv files.
+### Importing data
 
-data_dir <- '/gpfs/data/cbc/scrna_r_workshop'
-pbmc.1k <- Read10X_h5(paste0(data_dir, '/data/pbmc_1k_v3_filtered_feature_bc_matrix.h5'))
-pbmc.5k <- Read10X_h5(paste0(data_dir, '/data/5k_pbmc_v3_filtered_feature_bc_matrix.h5'))
+ - We are using the `SeuratData` package for some test data. 
+ - Use `AvailableData()` to see what datasets are available
+```{r}
+AvailableData()
 ```
 
-#Create the Seurat objects for them.
-```{r "create seurat object"}
-pbmc.1k <- CreateSeuratObject(counts = pbmc.1k, project = 'pbmc.1k')
-pbmc.5k <- CreateSeuratObject(counts = pbmc.5k, project = 'pbmc.5k')
+- We've already installed a few of the test datasets in this container, you would usually be able to install more datasets using `InstallData` but won't have permissions to install in this container. 
+- What if you want to run Seurat using your own data? We can use the function `Read10X_h5` to import some h5 files.    
+
+"Hierarchical Data Format (HDF5 or H5). H5 is a binary format that can compress and access data much more efficiently than text formats such as MEX, which is especially useful when dealing with large datasets." https://support.10xgenomics.com/single-cell-gene-expression/software/pipelines/latest/advanced/h5_matrices.   
+
+- You could also use you could also use `Read10X` and give a path to a folder that contains your matrix, features, and barcode tsv files.
+- After you have read in the 10X data, use it as the input to the `CreateSeuratObject` function.
+
+### Working with Seurat objects
+
+- We can look at the Seurat objects we've loaded from SeuratData:
+
+```{r}
+ifnb
+pbmc3k
 ```
-#Seurat Objects consist of slots: https://github.com/satijalab/seurat/wiki/Seurat#slots
-#One of the slots is assays, which can also have different slots or transformations: https://github.com/satijalab/seurat/wiki/Assay
-#Basically walk ppl through this https://github.com/satijalab/seurat/wiki/Seurat
+- The `pbmc3k` dataset is 2,700 peripheral blood mononuclear cells (PBMC) from 10X genomics.
+```{r}
+?pbmc3k
+```
+- The `ifnb` dataset is 14,000 IFNB-Stimulated and Control PBMCs.
+```{r}
+?ifnb
+```
 
+What assays and meta.data are available?
+```{r}
+pbmc3k@assays
+pbmc3k@meta.data
 
-#https://satijalab.org/seurat/articles/merge_vignette.html
-#merge() merges the raw count matrices of two Seurat objects and creates a new Seurat object with the resulting combined raw count matrix. To easily tell which original object any particular cell came from, you can set the add.cell.ids parameter with an c(x, y) vector, which will prepend the given identifier to the beginning of each cell name. The original project ID will remain stored in object meta data under orig.ident
+ifnb@assays
+ifnb@meta.data
+```
+
+### Merging data
+
+- Let's merge the datasets to make our QC and filtering a bit smoother (https://satijalab.org/seurat/articles/merge_vignette.html)
+- `merge()` merges the raw count matrices of two Seurat objects and creates a new Seurat object with the resulting combined raw count matrix. 
+- To easily tell which original object any particular cell came from, you can set the add.cell.ids parameter with an c(x, y) vector, which will prepend the given identifier to the beginning of each cell name. 
+- The original project ID will remain stored in object meta data under orig.ident
+
 ```{r "merge"}
-all_data <- merge(x = pbmc.1k, y = c(pbmc.5k), project = 'pbmc')
+all_data <- merge(x = ifnb, y = pbmc3k, add.cell.ids = c("ifnb", "pbmc3k"), project = 'pbmc')
+unique(all_data@meta.data$orig.ident)
 ```
 
-#We care about the percentage of reads that map to the mitochondrial genome b/c high mitochondrial reads in a cell can indicate that they are Low-quality or dying cells
-#We calculate mitochondrial QC metrics with the PercentageFeatureSet() function, which calculates the percentage of counts originating from a set of features
-#We use the set of all genes starting with MT- as a set of mitochondrial genes
-#the format of the mt sequences will vary depending on which organism/genome is used...(might be 'mt-' for example)
+### Data QC and filtering
+
+- We care about the percentage of reads that map to the mitochondrial genome because high mitochondrial reads in a cell can indicate that the cells are low-quality or dying cells
+- The mitochondrial QC metrics are calcualted with the `PercentageFeatureSet()` function, which calculates the percentage of counts originating from a set of features
+- We use the set of all genes starting with MT- as a set of mitochondrial genes -- the format of the mt sequences will vary depending on which organism/genome is used...(might be 'mt-' for example).
+
 ```{r "add mt percent data"}
 all_data[["percent.mt"]] <- PercentageFeatureSet(all_data, pattern = "^MT-")
 ```
 
+- Before we plot, we can set the order of the object idents to whatever order we'd like:
 ```{r}
-#Before we plot, set the order of the object idents to whatever order we'd like
 Idents(all_data) <- 'orig.ident'
-levels(all_data) <- c("pbmc.1k", "pbmc.5k")
+levels(all_data) <- c("pbmc3k", "IMMUNE_CTRL", "IMMUNE_STIM")
 
 ```
 
-#https://www.google.com/url?sa=t&rct=j&q=&esrc=s&source=web&cd=&ved=2ahUKEwi9243gqoX3AhVvneAKHVD5B60QFnoECAUQAQ&url=https%3A%2F%2Fwww.bioinformatics.babraham.ac.uk%2Ftraining%2F10XRNASeq%2FIntroduction.pdf&usg=AOvVaw0d7gdoHTH4l3zVJgH5ikXD
-#nFeature_RNA is the number of genes 
-#nCount_RNA is the number of UMIs (unique molecules -- like counts) 
+- We can also look at plots showing the distribution of the `percent.mt`, `nFeature_RNA` and `nCount_RNA`
+- `nFeature_RNA` is the number of genes 
+- `nCount_RNA` is the number of UMIs (unique molecules -- like counts)
+
 ```{r  "QC plots"}
-
-
 VlnPlot(all_data, features = "nFeature_RNA")
 VlnPlot(all_data, features = "nCount_RNA")
 VlnPlot(all_data, features="percent.mt")
 
+FeatureScatter(all_data, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
 FeatureScatter(all_data, feature1 = "nCount_RNA", feature2 = "percent.mt")
 FeatureScatter(all_data, feature1 = "nFeature_RNA", feature2 = "percent.mt")
-FeatureScatter(all_data, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
-#we can see groups of cells with:
-#high mt count, lower UMI counts (nCount) and lower unique genes (nFeature)
-
 
 ```
+- Low quality cells or empty droplets might have very few genes (nFeatures)
+- Dead or dying cells will also have high mitochondrial contamination
+- Doublets or multiplets will have high gene counts (nFeatures)
+- The total number of molecules (nCount) detected in a cell corresponds with the number of genes (nFeatures)
 
-#pick your filtering based on your qc plots, mt filtering based on your understanding of the system or pubs
+- Most of the cells have less than 2000 genes and less than 7000 or so UMIs.
+- Very low mitochondrial counts from the ifnb data -- perhaps this dataset was pre-filtered before being packaged into SeuratData.
+- We can see groups of cells with high mitochondrial counts, low UMI counts, and lower numbers of genes.
+- Our goal in QC filtering is to retain as much useful information as we can, while removing doublets, empty droplets, and dead cells.
+- We will pick some thresholds for filtering based off of what we see in our data, keeping in mind that if you are doing this with your own data, your plots will probably look very different.
+- Let's filter our data using `subset`, we'll keep cells that have between 500 and 7000 nFeature_RNA (genes) and less than 10% mitochondrial reads.
 
 ```{r "Data filtering"}
-all_data_sub <- subset(all_data, subset = nFeature_RNA > 500 & nFeature_RNA < 6000 & percent.mt < 25)
+all_data_sub <- subset(all_data, subset = nFeature_RNA > 500 & nFeature_RNA < 7000 & percent.mt < 10)
 ```
 
+- You can re-examine your QC plots after filtering if you'd like:
 ```{r}
 VlnPlot(all_data_sub, features = "nFeature_RNA")
 VlnPlot(all_data_sub, features = "nCount_RNA")
@@ -108,242 +227,335 @@ FeatureScatter(all_data_sub, feature1 = "nFeature_RNA", feature2 = "percent.mt")
 FeatureScatter(all_data_sub, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
 ```
 
-#use SCTransform to normalize -- use as an alternative to the NormalizeData, FindVariableFeatures, ScaleData workflow
-```{r "SCTransform"}
+- Next, we'll use `SCTransform` to normalize -- use as an alternative to the `NormalizeData`, `FindVariableFeatures`, `ScaleData` workflow, which is the default of what Seurat usually suggests.
+- First, split the merged object by `orig.ident`.
+
+```{r "Split data by orig.ident"}
 all_data_split <- SplitObject(all_data_sub, split.by = 'orig.ident')
-
-all_data_list <- lapply(all_data_split, function(x) {
-    x <- SCTransform(x,verbose=FALSE)}) # if you run this you might get several iteration limit reached issues
-
 ```
 
-```{r "Merge or Integrate?"}
 
-all_data_merged <- merge(x = all_data_list$pbmc.1k, y = c(all_data_list$pbmc.5k), merge.data = TRUE)
+### SCTransform normalization, clustering, dimension reduction
+
+Theory
+
+The theory behind SCTransform (https://genomebiology.biomedcentral.com/articles/10.1186/s13059-019-1874-1) is very similar to the generalized linear models (GLMs) used in bulkRNAseq analysis packages like DESeq2 and edgeR. In DESeq2 a negative binomial model is fitted to the counts and the mean and dispersion (roughly speaking how variable the observed count will be from the mean count) estimates from that model are used as the test statistics for comparison between groups. The same idea applies with SCTransform, with an additional aspect where SCTransform pools information across genes with similar abundances in order to address the higher sparsity of single cell data. 
+
+Below is a side-by-side comparison of sctransform with NormalizeData, FindVariableFeatures and ScaleData on the PBMC3k data:
+![sct](src/sctransform_vs_regular.png)
+We also like this figure from the SCTransform paper, which shows how SCTransform ('Pearson Residuals') and the standard log-transformation approach ('Log-normalization') helps alleviate variance in your data from sequencing depth alone :
+
+![sct_fig6](src/sct_fig6.png)
+- We can run SCTransform on the data list you just made.
+- You might get see a warning that says 'iteration limit reached' when you run this.
+- This warning can be ignored (https://github.com/satijalab/sctransform/issues/25) because the parameter estimation generating this warning is regularized later anyway. 
+
+```{r "SCTransform"}
+all_data_list <- lapply(all_data_split, function(x) {
+    x <- SCTransform(x,verbose=FALSE,return.only.var.genes = FALSE)}) # if you run this you might get several iteration limit reached issues
+```
+- When you run SCTransform you need to specify an additional parameter otherwise only the variable genes will be included in the scale data slot. Add return.only.var.genes = FALSE to the function call and that should solve the issue (https://github.com/satijalab/seurat/issues/3553).
+
+
+- Then we can re-merge the data using `merge.data = TRUE` so that we also merge the data slots instead of just merging the counts (which requires re-normalization). This is recommended if the same normalization approach was applied to all objects.
+```{r}
+all_data_merged <- merge(x = all_data_list$pbmc3k, y = c(all_data_list$IMMUNE_CTRL, all_data_list$IMMUNE_STIM), merge.data = TRUE)
+```
+
+- Then run PCA
+```{r}
 all_data_merged <- RunPCA(all_data_merged)
 ```
-#Error in PrepDR(object = object, features = features, verbose = verbose): Variable features haven't been set. Run FindVariableFeatures() or provide a vector of feature names.
-#You are getting the first error because after the merge, the variable feature slot gets wiped since there could be different variable features in each original object. The default for RunPCA is to use those features and since it's empty, you get an error. You can either set the variable features of the merged SCT assay yourself (to something like the intersection or union of the individual object's variable features) or provide this vector of features to RunPCA itself.
-#https://github.com/satijalab/seurat/issues/2852
-#SelectIntegrationFeatures from the list of Seurat objects before merge
+
+- You are getting an error because after the merge, the variable feature slot gets wiped since there could be different variable features in each original object. 
+- The default for `RunPCA` is to use those features and since it's empty, you get an error. 
+- You can either set the variable features of the merged SCT assay yourself (to something like the intersection or union of the individual object's variable features) or provide this vector of features to RunPCA itself (https://github.com/satijalab/seurat/issues/2852).
+- We will run `SelectIntegrationFeatures` on the list of Seurat objects before merge and then assign those as the `VariableFeatures`
+
 ```{r}
 integration_features <- SelectIntegrationFeatures(all_data_list)
 VariableFeatures(all_data_merged) <- integration_features
+```
+
+Then we can run the PCA and make an elbow plot:
+```{r}
 all_data_merged <- RunPCA(all_data_merged)
 ElbowPlot(all_data_merged)
 ```
-#10 PCs looks fine
 
-#Construct a KNN graph based on the euclidean distance in PCA space, and refine the edge weights between any two cells based on the shared overlap in their local neighborhoods (Jaccard similarity). 
-#This step is performed using the FindNeighbors() function, and takes as input the previously defined dimensionality of the dataset (first 10 PCs).
-
-#To cluster the cells, we next apply the Louvain algorithm to iteratively group cells together, with the goal of optimizing the standard modularity function. 
-#The FindClusters() function implements this procedure, and contains a resolution parameter that sets the ‘granularity’ of the downstream clustering, with increased values leading to a greater number of clusters. 
-#We find that setting this parameter between 0.4-1.2 typically returns good results for single-cell datasets of around 3K cells. 
-#Optimal resolution often increases for larger datasets. The clusters can be found using the Idents() function.
-
-
-#Seurat offers several non-linear dimensional reduction techniques, such as tSNE and UMAP, to visualize and explore these datasets. The goal of these algorithms is to learn the underlying manifold of the data in order to place similar cells together in low-dimensional space. Cells within the graph-based clusters determined above should co-localize on these dimension reduction plots. As input to the UMAP and tSNE, we suggest using the same PCs as input to the clustering analysis.
-#We use FIt-SNE: Use the FFT-accelerated Interpolation-based t-SNE. Based on Kluger Lab code found here: https://github.com/KlugerLab/FIt-SNE to make things faster.
+- Based on this plot, we get diminishing information returned once we get above ~10 PCs.
+- Next, construct a KNN graph based on the euclidean distance in PCA space, and refine the edge weights between any two cells based on the shared overlap in their local neighborhoods (Jaccard similarity). 
+- This step is performed using the FindNeighbors() function, and takes as input the previously defined dimensionality of the dataset (first 10 PCs).
 ```{r}
 all_data_merged <- FindNeighbors(all_data_merged, dims = 1:10)
+```
+
+- To cluster the cells, we run `FindClusters` to apply the Louvain algorithm to iteratively group cells together, with the goal of optimizing the standard modularity function. 
+- `FindClusters` takes a `resolution` argument (defaults to a value of 0.8), which sets the granularity of the clustering, setting this parameter between 0.4-1.2 typically returns good results for single-cell datasets of around 3K cells but the resolution might increase for larger datasets.
+- Let's run `FindClusters` with the default parameters:
+```{r}
 all_data_merged <- FindClusters(all_data_merged)
+```
+
+- Seurat offers several non-linear dimensional reduction technique to visualize and explore these datasets (umap, tsne). 
+- The goal of these algorithms is to learn the underlying manifold of the data in order to place similar cells together in low-dimensional space. 
+- As input to the UMAP and tSNE, we suggest using the same PCs as input to the clustering analysis. 
+- We recommend using FIt-SNE to make things faster. It is based on Kluger Lab code found here: https://github.com/KlugerLab/FIt-SNE 
+
+
+```{r}
 all_data_merged <- RunUMAP(all_data_merged, dims = 1:10)
 all_data_merged <- RunTSNE(all_data_merged, tsne.method = "FIt-SNE", seed.use=61)
 ```
 
-#look at the clusters 
+- Look at the clusters using `DimPlot()` function
 ```{r}
 DimPlot(all_data_merged, reduction='tsne')
 DimPlot(all_data_merged, reduction='umap')
 ```
-#Look at the clustering per original expt:
-```{r}
-#look at the metadata:
-head(all_data_merged@meta.data)
 
+- Group the plots by the `idents`
+```{r}
 DimPlot(all_data_merged, reduction='tsne', group.by = 'orig.ident')
 DimPlot(all_data_merged, reduction='umap', group.by = 'orig.ident')
-
 ```
 
-#Let's try integrating to see how that changes things.
-#In this vignette, we present a slightly modified workflow for the integration of scRNA-seq datasets. Instead of utilizing canonical correlation analysis (‘CCA’) to identify anchors, we instead utilize reciprocal PCA (‘RPCA’). When determining anchors between any two datasets using RPCA, we project each dataset into the others PCA space and constrain the anchors by the same mutual neighborhood requirement. The commands for both workflows are largely identical, but the two methods may be applied in different context.
+### Data Integration
 
-#By identifying shared sources of variation between datasets, CCA is well-suited for identifying anchors when cell types are conserved, but there are very substantial differences in gene expression across experiments. CCA-based integration therefore enables integrative analysis when experimental conditions or disease states introduce very strong expression shifts, or when integrating datasets across modalities and species. However, CCA-based integration may also lead to overcorrection, especially when a large proportion of cells are non-overlapping across datasets.
+In most cases if we are looking for differences in gene expression between experimental conditions, we will actually want to integrate our datasets rather than merge them. This is because the experimental conditions can cause cells to cluster both by condition and by cell type. See https://satijalab.org/seurat/archive/v3.0/integration.html for more details. 
 
-#RPCA-based integration runs significantly faster, and also represents a more conservative approach where cells in different biological states are less likely to ‘align’ after integration. We therefore,recommend RPCA during integrative analysis where: * A substantial fraction of cells in one dataset have no matching type in the other * Datasets originate from the same platform (i.e. multiple lanes of 10x genomics) * There are a large number of datasets or cells to integrate (see INSERT LINK for more tips on integrating large datasets)
+There are two choices for integrating data: canonical correlation analysis (CCA) and reciprocal PCA (RPCA).
 
-#Below, we demonstrate the use of reciprocal PCA to align the same stimulated and resting datasets first analyzed in our introduction to scRNA-seq integration vignette. While the list of commands is nearly identical, this workflow requires users to run principal components analysis (PCA) individually on each dataset prior to integration. Users should also set the ‘reduction’ argument to ‘rpca’, when running FindIntegrationAnchors().
+**CCA** is well-suited for identifying anchors when cell types are conserved, but there are very substantial differences in gene expression across experiments. CCA-based integration therefore enables integrative analysis when experimental conditions or disease states introduce very strong expression shifts, or when integrating datasets across modalities and species. However, CCA-based integration may also lead to overcorrection, especially when a large proportion of cells are non-overlapping across datasets.
 
-https://satijalab.org/seurat/articles/integration_rpca.html
+**RPCA**-based integration runs significantly faster, and also represents a more conservative approach where cells in different biological states are less likely to ‘align’ after integration. RPCA is recommended during integrative analysis where: 
+- A substantial fraction of cells in one dataset have no matching type in the other 
+- Datasets originate from the same platform (i.e. multiple lanes of 10x genomics) 
+- There are a large number of datasets or cells to integrate 
 
-#find anchors using our integration_features we made earlier w/ SelectIntegrationFeatures..
+Here, we will show how to integrate SCTransform-normalized data using `RPCA`.
 
-#PrepSCTIntegration takes in a list of objects that have been normalized with the SCTransform method and performs the following steps:
-#If anchor.features is a numeric value, calls SelectIntegrationFeatures to determine the features to use in the downstream integration procedure.
-#Ensures that the sctransform residuals for the features specified to anchor.features are present in each object in the list. This is necessary because the default behavior of SCTransform is to only store the residuals for the features determined to be variable. Residuals are recomputed for missing features using the stored model parameters via the GetResidual function.
-#Subsets the scale.data slot to only contain the residuals for anchor.features for efficiency in downstream processing.
+The first step is `SelectIntegrationFeatures()`, which ranks features by the number of datasets they are deemed variable in, breaking ties by the median variable feature rank across datasets, and returns the top scoring features by this ranking.
 
+```{r}
+integration_features <- SelectIntegrationFeatures(all_data_list)
+```
+
+Next, we `PrepSCTIntegration`, which takes a list of objects that have been normalized with SCTransform and performs the following steps:
+- If anchor.features is a numeric value, calls `SelectIntegrationFeatures` to determine the features to use in the downstream integration procedure.
+- Ensures that the sctransform residuals for the features specified to anchor.features are present in each object in the list. This is necessary because the default behavior of SCTransform is to only store the residuals for the features determined to be variable. Residuals are recomputed for missing features using the stored model parameters via the GetResidual function.
+- Subsets the scale.data slot to only contain the residuals for anchor.features for efficiency in downstream processing.
 
 ```{r}
 all_data_list <- PrepSCTIntegration(object.list = all_data_list, anchor.features = integration_features)
+```
 
+Next we run PCA on all individual objects in the list:
+
+```{r}
 #run PCA on all objects in list
 all_data_list <- lapply(X = all_data_list, FUN = RunPCA, features = integration_features)
+```
 
-#Find a set of anchors between a list of Seurat objects. These anchors can later be used to integrate the objects using the IntegrateData function. 
-anchors <- FindIntegrationAnchors(object.list = all_data_list, normalization.method = "SCT", anchor.features = integration_features)
+Find a set of anchors between a list of Seurat objects, they can later be used to integrate the objects using the IntegrateData function. Set the `reduction` to `rpca`
+```{r}
+anchors <- FindIntegrationAnchors(object.list = all_data_list, normalization.method = "SCT", anchor.features = integration_features, reduction = 'rpca')
+```
 
-#Integrate the data:
+The last step is integrating the data:
+```{r}
 all_data_integrated <- IntegrateData(anchorset = anchors, normalization.method = "SCT")
 ```
 
-#Run PCA on integrated object
+Then we can run PCA on the integrated object:
 ```{r}
 all_data_integrated <- RunPCA(all_data_integrated)
 ElbowPlot(all_data_integrated)
-#10 PC still.
+```
 
-#clustering and dimension reduction on integrated object
-all_data_integrated <- FindNeighbors(all_data_integrated, dims = 1:10)
-all_data_integrated <- FindClusters(all_data_integrated)
+Then we can also fun UMAP and TSNE:
+```{r}
 all_data_integrated <- RunUMAP(all_data_integrated, dims = 1:10)
 all_data_integrated <- RunTSNE(all_data_integrated, tsne.method = "FIt-SNE", seed.use=61)
+```
+Find neighbors and clusters
+```{r}
+all_data_integrated <- FindNeighbors(all_data_integrated, dims = 1:10)
+all_data_integrated <- FindClusters(all_data_integrated)
+```
 
+```{r}
 DimPlot(all_data_integrated, reduction='tsne', group.by = 'orig.ident')
 DimPlot(all_data_integrated, reduction='umap', group.by = 'orig.ident')
 ```
 
-```{r}
-#compare merged vs integrated)
-DimPlot(all_data_merged, reduction='tsne', group.by = 'orig.ident') + ggtitle("Merged") | DimPlot(all_data_integrated, reduction='tsne', group.by = 'orig.ident') + ggtitle("Integrated")
+Then we can compare the tsne and umap plots of the merged and integrated datasets. This helps illustrate why we integrate!
 
+```{r}
+DimPlot(all_data_merged, reduction='tsne', group.by = 'orig.ident') + ggtitle("Merged") | DimPlot(all_data_integrated, reduction='tsne', group.by = 'orig.ident') + ggtitle("Integrated")
 
 DimPlot(all_data_merged, reduction='umap', group.by = 'orig.ident') + ggtitle("Merged") | DimPlot(all_data_integrated, reduction='umap', group.by = 'orig.ident') + ggtitle("Integrated")
 ```
 
-```{r "look at a few summary tables to of cells per orig.ident and seurat cluster}
-table(all_data_integrated@meta.data$orig.ident, all_data_integrated@meta.data$seurat_clusters)
+### Differential Expression Testing
+
+Seurat implements differential expression testing using `FindMarkers` and `FindAllMarkers` functions.
+
+- `FindMarkers` finds differentially expressed genes across two identity classes that you specify when calling the function.
+- `FindAllMarkers` finds differentially expressed genes for each identity class compared to a combination of all other identity classes.
+
+By default, these functions implement the Wilcoxon rank sum test, but they also take an argument `test.use` that allows you to use alternative tests if you want to do that (run `?FindMarkers` for more information). If you want to use MAST or DESeq2 you'd have to make sure those packages are installed.
+
+Let's try running some of these tests. First, lets see what identity class our current Seurat object is using.
+
+```{r}
+levels(Idents(all_data_integrated))
 ```
-#lots of built-in viz for Seurat, have different defaults re: slots and assays they use.
-#SCT assay slots are counts, data, and scale.data, which are the corrected counts, log1p(counts), and pearson residuals.
-#RNA assay slots are raw counts (@counts slot), normalized data (@data slot), and scaled data for dimensional reduction (@scale.data slot)
 
-#Look at featureplots first
-#Plots the 'data' slot by default.
+Lets make sure we are using the orig.ident as our `Idents`:
+```{r}
+Idents(all_data_integrated) <- 'orig.ident'
+```
 
-#note that if you split the plots by some ident, the scales might be different and FeaturePlot doesn't include a scale bar by default (thats why I add a legend)
-#also use the & instead of + bc otherwise it'll only apply the color arguments to one plot (not both), I think its bc of the splitby
-#you can add a limits argument ot scale_colour_gradientn
+And make sure we are using the `RNA` assay:
 
-```{r "Look at some featureplots"}
+```{r}
 DefaultAssay(all_data_integrated) <- 'RNA'
+```
 
-#cluster_markers %>% dplyr::filter(pct.2 > .9) %>% dplyr::filter(avg_log2FC > 2)
-FeaturePlot(all_data_integrated, features = 'IER2', reduction = 'tsne',  order = T, split.by = 'orig.ident') & 
-   scale_colour_gradientn(colours = rev(brewer.pal(n = 11, name = "Spectral"))) & 
-   theme(legend.position = "right")
+Lets run `FindMarkers` comparing IMMUNE_CTRL and IMMUNE_STIM and use some pre-filtering to look at features that have at least a two-fold change in average expression in each comparison and features that are detected in at least 95% of cells in either group.
 
-#cluster_markers %>% dplyr::filter(pct.2 > .9) %>% dplyr::filter(avg_log2FC > 2)
-FeaturePlot(all_data_integrated, features = 'IER2', reduction = 'tsne',  order = T, split.by = 'orig.ident') & 
-   scale_colour_gradientn(limits = c(0,120), colours = rev(brewer.pal(n = 11, name = "Spectral"))) & 
-   theme(legend.position = "right")
+```{r}
+ctl_vs_stim <- FindMarkers(all_data_integrated, ident.1 = 'IMMUNE_CTRL', ident.2 = 'IMMUNE_STIM', min.pct = 0.95, logfc.threshold = log(2))
+ctl_vs_stim
+```
 
+The results dataframe has the following columns :
 
+    p_val : p_val (unadjusted)
+    avg_log2FC : log fold-change of the average expression between the two groups. Positive values indicate that the feature is more highly expressed in the first group.
+    pct.1 : The percentage of cells where the feature is detected in the first group
+    pct.2 : The percentage of cells where the feature is detected in the second group
+    p_val_adj : Adjusted p-value, based on Bonferroni correction using all features in the dataset.
+
+### Data Visualization
+
+- Seurat comes with many functions for visualizing your data. Conveniently, you can use `ggplot`-like syntax to tweak your figures as needed. 
+- First, lets switch to the `SCT` assay for our visualization.
+
+```{r}
 DefaultAssay(all_data_integrated) <- 'SCT'
+```
 
-#cluster_markers %>% dplyr::filter(pct.2 > .9) %>% dplyr::filter(avg_log2FC > 2)
-FeaturePlot(all_data_integrated, features = 'IER2', reduction = 'tsne',  order = T, split.by = 'orig.ident') & 
-   scale_colour_gradientn(colours = rev(brewer.pal(n = 11, name = "Spectral"))) & 
-   theme(legend.position = "right")
+- We can make a `FeaturePlot`, which uses the `data` slot by default.
+- SCT assay slots are counts, data, and scale.data, which are the corrected counts, log1p(counts), and pearson residuals.
 
-#cluster_markers %>% dplyr::filter(pct.2 > .9) %>% dplyr::filter(avg_log2FC > 2)
-FeaturePlot(all_data_integrated, features = 'IER2', reduction = 'tsne',  order = T, split.by = 'orig.ident') & 
-   scale_colour_gradientn(limits = c(0,4), colours = rev(brewer.pal(n = 11, name = "Spectral"))) & 
-   theme(legend.position = "right")
+```{r}
+FeaturePlot(all_data_integrated, 
+            features = rownames(ctl_vs_stim)[1:2], 
+            reduction = 'umap',  
+            order = T, 
+            split.by = 'orig.ident')
+```
 
-
-DefaultAssay(all_data_integrated) <- 'integrated'
-
-#cluster_markers %>% dplyr::filter(pct.2 > .9) %>% dplyr::filter(avg_log2FC > 2)
-FeaturePlot(all_data_integrated, features = 'IER2', reduction = 'tsne',  order = T, split.by = 'orig.ident') & 
-   scale_colour_gradientn(colours = rev(brewer.pal(n = 11, name = "Spectral"))) & 
-   theme(legend.position = "right")
-
-#cluster_markers %>% dplyr::filter(pct.2 > .9) %>% dplyr::filter(avg_log2FC > 2)
-FeaturePlot(all_data_integrated, features = 'IER2', reduction = 'tsne',  order = T, split.by = 'orig.ident') & 
-   scale_colour_gradientn(limits = c(-2.5,10), colours = rev(brewer.pal(n = 11, name = "Spectral"))) & 
+We can use `ggplot` syntax to add legends:
+```{r}
+FeaturePlot(all_data_integrated, 
+            features = rownames(ctl_vs_stim)[1:2], 
+            reduction = 'umap',  
+            order = T, 
+            split.by = 'orig.ident') +
    theme(legend.position = "right")
 ```
 
-#RidgePlot uses 'counts' slot for whatever the default assay is
-#you can also just tell it exactly what to use
-#obviously axis ranges are differnt...
+Note that we are only getting the legend on the last plot that we get when we use the `split.by` argument. This is probably not what we want. If we use the `&` symbol instead of `+`, we can get the legend to populate to all the figures:
+```{r}
+FeaturePlot(all_data_integrated, 
+            features = rownames(ctl_vs_stim)[1:2], 
+            reduction = 'umap',  
+            order = T, 
+            split.by = 'orig.ident') &
+   theme(legend.position = "right")
+```
+We can also use customized colors:
+
 ```{r}
 
+FeaturePlot(all_data_integrated, 
+            features = rownames(ctl_vs_stim)[1:2], 
+            reduction = 'umap',  
+            order = T, 
+            split.by = 'orig.ident') &
+    theme(legend.position = "right") &
+    scale_colour_gradientn(colours = rev(brewer.pal(n = 11, name = "Spectral"))) 
+```
+
+We have used `VlnPlot` to look at our QC metrics earlier. We can also use it to look expression across clusters, it uses the `counts` slot by default. First, switch to using the clusters as idents:
+
+```{r}
 Idents(all_data_integrated) <- 'seurat_clusters'
-DefaultAssay(all_data_integrated) <- 'RNA'
-
-#cluster_markers %>% dplyr::filter(pct.2 > .9) %>% dplyr::filter(avg_log2FC > 2)
-RidgePlot(all_data_integrated, features = c('GAPDH','TPT1','GNAS','HLA-B'), assay = 'SCT', slot = 'counts', ncol = 2) + theme(legend.position="none")
-RidgePlot(all_data_integrated, features = c('GAPDH','TPT1','GNAS','HLA-B'), assay = 'SCT', slot = 'data', ncol = 2) + theme(legend.position="none")
-
 ```
-#VlnPlot is similar, cen set ncol to whatever you want
-```{r}
-
-VlnPlot(all_data_integrated, features = c('GAPDH','TPT1','GNAS','HLA-B'), assay = 'SCT', slot = 'counts', ncol = 2) + theme(legend.position="none")
-VlnPlot(all_data_integrated, features = c('GAPDH','TPT1','GNAS','HLA-B'), assay = 'SCT', slot = 'data', ncol = 2) + theme(legend.position="none")
-
-```
-
-# Dot plots - the size of the dot corresponds to the percentage of cells expressing the
-# feature in each cluster. The color represents the average expression level
-
-#The values in DotPlot are extracted from the @data slot, averaged, and then passed to scale. These are then Min-Maxed based on the col.min and col.max parameter values.
-#https://github.com/satijalab/seurat/issues/783
-#Name of assay to use, defaults to the active assay
 
 ```{r}
-
-DotPlot(all_data_integrated, features = c('GAPDH','TPT1','GNAS','HLA-B'), assay = 'SCT')
-DotPlot(all_data_integrated, features = c('GAPDH','TPT1','GNAS','HLA-B'), assay = 'RNA')
-
+VlnPlot(all_data_integrated,features = rownames(ctl_vs_stim)[1])
 ```
 
-#Make sure idents are Seurat_clusters and we use the RNA assay
-#we also are setting some thresholds that will help make the DE functions run faster.
-#FindAllMarkers - Finds markers (differentially expressed genes) for each/all of the identity classes in a dataset (e.g. one class vs all others)
-#FindMarkers - Finds markers (differentially expressed genes) for a specific comparison (you specifcy pair-wise comparisons)
-#FindConservedMarkers - Finds markers that are conserved across specific groups 
-
-
-# Pre-filter features that have less than a two-fold change between the average expression of
-# Pre-filter features that are detected at <95% frequency in either group
-```{r "FindAllMarkers to find DE genes across clusters"}
-Idents(all_data_integrated) <- 'seurat_clusters'
-DefaultAssay(all_data_integrated) <- 'RNA'
-cluster_markers <- FindAllMarkers(all_data_integrated, min.pct = 0.95, logfc.threshold = log(2))
-cluster_1_v_2_markers <- FindMarkers(all_data_integrated, min.pct = 0.95, logfc.threshold = log(2), ident.1 = '1', ident.2 = '2')
-cluster_1_v_15_markers <- FindMarkers(all_data_integrated, min.pct = 0.95, logfc.threshold = log(2), ident.1 = '1', ident.2 = '15')
-cluster_8_v_15_markers <- FindMarkers(all_data_integrated, min.pct = 0.95, logfc.threshold = log(2), ident.1 = '8', ident.2 = '15')
-
-
-cluster_1_v_2_conserved <- FindConservedMarkers(all_data_integrated, ident.1 = '1', ident.2 = '15')
-
+If you split.by orig.ident you'll get plots that are colored a little differently (but start to look a bit crowded):
+```{r}
+VlnPlot(all_data_integrated, split.by = 'orig.ident', features = rownames(ctl_vs_stim)[1])
 ```
 
-#outputs
-# avg_logFC: log fold-chage of the average expression between the two groups. Positive values indicate that the gene is more highly expressed in the first group
-# pct.1: The percentage of cells where the gene is detected in the first group
-# pct.2: The percentage of cells where the gene is detected in the second group
-# p_val_adj: Adjusted p-value, based on bonferroni correction using all genes in the dataset
+Another helpful visualization from Seurat is `DotPlot`. The size of each dot indicates the percentage of cells expressing the feature and the color is the average expression level. It uses the scale.data slot by default.
+
+```{r}
+DotPlot(all_data_integrated, features = rownames(ctl_vs_stim)[1:5]) & 
+    RotatedAxis() 
+```
+
+We can use more custom colors:
+
+```{r}
+DotPlot(all_data_integrated, features = rownames(ctl_vs_stim)[1:5]) &
+    RotatedAxis() & 
+    scale_color_viridis(option = "magma", direction = -1) 
+```
+
+Seurat also makes heatmaps with `DoHeatmap`, which also uses the "scale.data" slot. We'll switch to the `RNA` slot.
+
+```{r}
+Idents(all_data_integrated) <-  'orig.ident'
+DefaultAssay(all_data_integrated) <-  'RNA'
+DoHeatmap(all_data_integrated, features = rownames(ctl_vs_stim)[1:5])
+DoHeatmap(all_data_integrated, features = rownames(ctl_vs_stim)[1:5]) & theme(axis.text.x = element_text(size = 5)) & 
+   scale_fill_gradient2( low = c('#2c7bb6', '#abd9e9'), mid = '#ffffbf', high = c('#fdae61', '#d7191c')) 
+```
+
+We can use custom colors again if we'd like:
+```{r}
+DoHeatmap(pbmc1k, features = all_cluster_markers$gene[1:3]) & 
+   scale_fill_gradient2( low = c('#2c7bb6', '#abd9e9'), mid = '#ffffbf', high = c('#fdae61', '#d7191c')) 
+```
+
+
+**Thank you!**
+
+Part two of this workshop will cover:
+    - Working with multimodal data
+    - Controlling for Type I error in estimated clusters with clusterpval
+    - Classifying cell types with a reference atlas with TransferAnchors from Seurat    
+    - Gene set enrichment analysis with fgsea
+    - Joint estimation of differential expression and gene set enrichment with iDEA      
+    
+- Much of this notebook was adapted from the Seurat vignettes https://satijalab.org/seurat and GitHub repository https://github.com/satijalab/seurat
+- If you have questions you can come by our office hours! All are welcome and starting next week, we will host them on Tuesdays from 10-11:30 and Wednesdays from 2:30-4.
 
 
 
 
 
+
+```{r}
+AvailableData()
 ```
 #still need to add bits about how to add annotations from cell atlas data
 
