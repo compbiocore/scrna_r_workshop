@@ -66,10 +66,12 @@ library(clusterpval)
 library('pbmc3k.SeuratData')
 library('cbmc.SeuratData')
 library('ifnb.SeuratData')
+library('panc8.SeuratData')
 data("pbmc3k")
 data("cbmc")
 data("ifnb")
-cbmc
+data("panc8")
+
 
 ```
 
@@ -246,12 +248,14 @@ function_cluster <- function(x) {
 ```
 
 Here we can use the `test_clusters_approx` function and approximates the p-values for the clusters via importance sampling.
-```{r}
+```{r, message=FALSE, warnings=FALSE, results='hide'}
 tc <- test_clusters_approx(
   as.matrix(pbmc3k_sub@assays[["RNA"]]@counts),
-  k1=1, k2=7, cl=clusters, cl_fun=FindClusters, ndraws=100)
+  k1=1, k2=3, cl=clusters, cl_fun=function_cluster, ndraws=100)
 ```
-
+```{r}
+tc
+```
 The resulting output contains:
 stat: the test statistic - the Euclidean distance between the mean of cluster k1 and the mean of cluster k2
 pval: the approximate p-value
@@ -259,26 +263,154 @@ stderr: standard error of the p-value estimate
 clusters: the estimated cluster assignments
 
 We are getting back NaN for the pvalues, likely because we are using only 100 draws because we have limited time/oscar resources for the workshop.
-The authors are working on an [implementation for expression analysis](https://github.com/lucylgao/clusterpval/issues/3), which we will continue to watch for.
+The authors are working on an implementation for expression analysis what would allow this method to perform differential expression p-value correction, but it is not functional as yet (https://github.com/lucylgao/clusterpval/issues/3).
 
+##############################
 
 ## Working with TransferAnchors from Seurat 
-See  (https://satijalab.org/seurat/archive/v3.0/integration.html) for an overview. Seurat has a few built in methods to identify shared cell states present across different datasets. They can be different conditions, different individuals, technologies, etc. First, Seurat tries to find anchors between pairs of datasets. These represent pairwise correspondences between individual cells (one in each dataset), that Seurat hypothesizes originate from the same biological state. These ‘anchors’ are then used to harmonize the datasets, or transfer information from one dataset to another. In the first part of this workshop, we went over running data integration wtih SCTransform-normalized datasets (https://satijalab.org/seurat/archive/v3.0/integration.html). In this follow up session, we will go over a similar approaches to integrate many datasets (https://satijalab.org/seurat/archive/v3.0/integration.html) or very large datasets (https://satijalab.org/seurat/archive/v3.0/integration.html).
+Seurat has a few built in methods to identify shared cell states present across different datasets. They can be different conditions, different individuals, technologies, etc. First, Seurat tries to find anchors between pairs of datasets. These represent pairwise correspondences between individual cells (one in each dataset), that Seurat hypothesizes originate from the same biological state. These ‘anchors’ are then used to harmonize the datasets, or transfer information from one dataset to another. In the first part of this workshop, we went over running data integration with SCTransform-normalized datasets from different experiments. In this follow up session, we will go over how you can leverage an integrated reference dataset to annotate new query datasets. This can be helpful for using cell atlases to annotate cell types in your experimental datasets.
 
+We'll work with the `panc8` data.
+
+```{r}
+panc8
+?panc8
+```
+First, lets split the object and run SCTransform
+
+```{r}
+pancreas.list <- SplitObject(panc8, split.by = "tech")
+```
+
+Then we run SCTransform
+```{r}
+pancreas.list <- lapply(pancreas.list, function(x) {
+    x <- SCTransform(x,verbose=FALSE,return.only.var.genes = FALSE)}) 
+```
+
+To construct a reference, we will identify ‘anchors’ between the individual datasets. We'll pick 3 of the objects to construct our inegrated reference and 1 will be the query.
+```{r}
+pancreas.ref <- c(pancreas.list$celseq, pancreas.list$celseq2, pancreas.list$smartseq2)
+pancreas.query <- pancreas.list$fluidigmc1
+```
+
+Then we can `SelectIntegrationFeatures`, `PrepSCTIntegration`, `FindIntegrationAnchors`, and `IntegrateData`.
+```{r}
+integration_features <- SelectIntegrationFeatures(pancreas.ref)
+pancreas.ref <- PrepSCTIntegration(object.list = pancreas.ref, anchor.features = integration_features)
+ref.anchors <- FindIntegrationAnchors(object.list = pancreas.ref , normalization.method = "SCT", anchor.features = integration_features)
+pancreas.ref <- IntegrateData(anchorset = ref.anchors, normalization.method = "SCT")
+```
+
+Run PCA and UMAP
+```{r}
+pancreas.ref <- RunPCA(pancreas.ref, verbose = FALSE)
+pancreas.ref <- RunUMAP(pancreas.ref, reduction = "pca", dims = 1:20, verbose = FALSE)
+
+p1 <- DimPlot(pancreas.ref, reduction = "umap", split.by = "tech") & coord_fixed(ratio = 1)
+p2 <- DimPlot(pancreas.ref, reduction = "umap", group.by = "celltype", label = TRUE, repel = TRUE) +
+    NoLegend() & coord_fixed(ratio = 1)
+p1 / p2
+```
+
+
+Seurat also supports the projection of reference data (or meta data) onto a query object. While many of the methods are conserved (both procedures begin by identifying anchors), there are two important distinctions between data transfer and integration:
+
+    In data transfer, Seurat does not correct or modify the query expression data.
+    In data transfer, Seurat has an option (set by default) to project the PCA structure of a reference onto the query, instead of learning a joint structure with CCA. We generally suggest using this option when projecting data between scRNA-seq datasets.
+
+After finding anchors, we use the `TransferData()` function to classify the query cells based on reference data (a vector of reference cell type labels). `TransferData()` returns a matrix with predicted IDs and prediction scores, which we can add to the query metadata.
+
+First, FindTransferAnchors between pancreas.ref and pancreas.query.
+```{r}
+pancreas.anchors <- FindTransferAnchors(reference = pancreas.ref, 
+                                        query = pancreas.query,
+                                        dims = 1:20, 
+                                        reference.reduction = "pca")
+```
+
+Classify query cells based on reference data
+```{r}
+predictions <- TransferData(anchorset = pancreas.anchors, 
+                            refdata = pancreas.ref$celltype,
+                            dims = 1:20)
+```
+
+Add the cell predictions to the pancreas.query metadata
+```{r}
+pancreas.query <- AddMetaData(pancreas.query, metadata = predictions)
+```
+
+Because we have the original label annotations from our full integrated analysis, we can evaluate how well our predicted cell type annotations match the full reference. In this example, we find that there is a high agreement in cell type classification, with over 96% of cells being labeled correctly.
+```{r}
+pancreas.query$prediction.match <- pancreas.query$predicted.id == pancreas.query$celltype
+table(pancreas.query$prediction.match)
+```
+
+##############################
 
 ## Gene set enrichment analysis
-Gene set enrichment analysis attempts to identify genes that are over-represented in a set of genes that make up pathways associated with various mechanisms. You can think of it like this: if a particular pathway consists of 300 genes, and 280 of those 300 genes are in our list of differentially expressed genes (DEGs), then is that pathway relevant to the differences between our groups of interest?
 
-One of the more basic approaches to answering this question is Overrepresentation Analysis (ORA) (citation: https://yulab-smu.top/biomedical-knowledge-mining-book/references.html#ref-boyle2004). It takes as input a list of genes (aka the background) with pvalues indicating which genes are differentially expressed, and a pathway / set of genes, computes the number of DEGs that are found in the pathway, and then computes a p-value using a hypergeometric distribution based on that number along with the number of background genes and number of genes in the pathway.
-GSEA
+Gene set enrichment analysis attempts to identify genes that are over-represented in a set of genes that make up pathways associated with various mechanisms. You can think of it like this: if a particular pathway consists of 300 genes, and 280 of those 300 genes are in our list of differentially expressed genes, then is that pathway relevant to the differences between our groups of interest?
 
-ORA is solely based on the number of DEGs out of the , and thus will find pathways that have a lot of DEGs out of the background. However, ORA will miss smaller but coordinated changes in pathways, for example when a pathway does not contain many DEGs, but all genes in the pathway change together. A more complex approach to address this question is Gene Set Enrichment Analysis (GSEA), which utilizes all genes in the list rather than just the DEGs. GSEA takes a ranked list of genes in the set instead. How to create the ranked list is an open question, but typically log fold change, the test statistic, or a combination of log fold change and pvalue from a differential expression analysis are used.
+Two commonly used methods to look for enrichment are overrepresentation analysis (ORA) or gene set enrichment analysis (GSEA). 
+- Over Representation Analysis (ORA) looks for functions or processes that are over-represented (= enriched) in an experimentally-derived gene list (e.g. all differentially expressed genes) relative to a background gene list (e.g. all genes in the dataset) (https://academic.oup.com/bioinformatics/article/20/18/3710/202612?login=true). 
+- Gene Set Enrichment (GSEA) takes a ranked list of genes (e.g. all genes in the differential expression analysis sorted by log fold change or test statistic or some other metric) and calculates an enrichment score based on whether a gene set is over-represented at the top or bottom of the list (https://www.ncbi.nlm.nih.gov/pmc/articles/PMC1239896/).
 
-We will not get into how GSEA method works here, but the core results from such an analysis are:
+ORA will miss smaller but coordinated changes in pathways -- so, when a pathway doesn't contain many differentially expressed genes, but all the genes in the pathway change together.
+
+Here we'll talk about some GSEA methods you can use with your single cell data. Some of the details of the implementation can vary, but the core results some such analyses are:
 
     Enrichment score (ES) - a representation of how overrepresented a gene set is at the top or bottom of the ranked list.
     p-value of ES - the significance of the score for that gene set
     Adjusted p-value - an adjusted p-value to account for multiple hypothesis testing of multiple gene sets
+
+Let's try running some GSEA analyses on the `ifnb` data. Let's run through the standard data processing pipeline and run `FindMarkers` to compare `STIM` to `CTRL`.
+
+```{r}
+ifnb_sub <- subset(ifnb, subset = nFeature_RNA > 1000 & nFeature_RNA < 7000 )
+ifnb.list <- SplitObject(ifnb_sub, split.by = 'stim')
+ifnb.list <- lapply(ifnb.list, function(x) {
+    x <- SCTransform(x,verbose=FALSE,return.only.var.genes = FALSE)})
+ifnb.merge <- merge(x = ifnb.list$CTRL, y = ifnb.list$STIM, merge.data = TRUE) 
+integration_features <- SelectIntegrationFeatures(ifnb.list)
+VariableFeatures(ifnb.merge) <- integration_features
+ifnb.merge <- RunPCA(ifnb.merge)
+ElbowPlot(ifnb.merge)
+```
+
+```{r}
+ifnb.list <- PrepSCTIntegration(object.list = ifnb.list, anchor.features = integration_features)
+ifnb.anchors <- FindIntegrationAnchors(object.list = ifnb.list, normalization.method = "SCT", anchor.features = integration_features)
+ifnb_integrated <- IntegrateData(anchorset = ifnb.anchors, normalization.method = "SCT")
+ifnb_integrated <- RunPCA(ifnb_integrated)
+ifnb_integrated<- FindNeighbors(ifnb_integrated, dims = 1:10)
+ifnb_integrated <- FindClusters(ifnb_integrated)
+ifnb_integrated <- RunUMAP(ifnb_integrated, dims = 1:10)
+ifnb_integrated <- RunTSNE(ifnb_integrated, tsne.method = "FIt-SNE", seed.use=61)
+```
+```{r}
+DefaultAssay(ifnb_integrated) <- 'RNA'
+Idents(ifnb_integrated) <- 'stim'
+
+ctl_vs_stim <- FindMarkers(ifnb_integrated, ident.1 = 'CTRL', ident.2 = 'STIM', min.pct = 0.95, logfc.threshold = log(2))
+ctl_vs_stim$zscore <- qnorm(ctl_vs_stim$p_val/2.0, lower.tail=FALSE)
+ctl_vs_stim$se <- abs(ctl_vs_stim$avg_log2FC/ctl_vs_stim$zscore)
+ctl_vs_stim$beta_var <- ctl_vs_stim$se^2
+#from https://github.com/xzhoulab/iDEA/issues/4
+```
+
+#pick this gene set https://www.gsea-msigdb.org/gsea/msigdb/cards/REACTOME_INTERFERON_SIGNALING
+
+
+all_gene_sets <- msigdbr()
+
+
+Idents(sct.combined) <- "seurat_clusters"
+wt_vs_mut_null <- FindMarkers(sct.combined, ident.1 = "WT", ident.2 = "MUT",
+                       group.by="treatment", subset.ident="2", test.use="MAST")
+sum_wt_vs_mut_null <- stderr(wt_vs_mut_null)
+
 
 We also run a more standard GSEA analysis, on just the Hallmark gene sets. There is an open question of how to create a ranked list for this analysis. We started with avg_logFC as was suggested in issue#50 on the fgsea repo, but it returned no significant pathways at all, which does not seem right for our comparisons also given Table \@ref(tab:de-markers). This may be because in the discussion avg_logFC was suggested when comparing markers just between cell type clusters, but we are also actually comparing between different treatment types. Another option was to use -sign(avg_log2FC)*log10(p_val_adj), which incorporates both logfoldchange and the pvalue. This approach seemed more reasonable and yielded results more similar to iDEA.
 iDEA
@@ -302,99 +434,3 @@ notes for brainstorming
 ```
 
 
-
-```{r}
-data_dir <- '/gpfs/data/cbc/scrna_r_workshop'
-pbmc.1k <- Read10X_h5(paste0(data_dir, '/data/pbmc_1k_v3_filtered_feature_bc_matrix.h5'))
-pbmc.5k <- Read10X_h5(paste0(data_dir, '/data/5k_pbmc_v3_filtered_feature_bc_matrix.h5'))
-pbmc.1k <- CreateSeuratObject(counts = pbmc.1k, project = 'pbmc.1k')
-pbmc.5k <- CreateSeuratObject(counts = pbmc.5k, project = 'pbmc.5k')
-
-all_data <- merge(x = pbmc.1k, y = c(pbmc.5k), project = 'pbmc')
-all_data[["percent.mt"]] <- PercentageFeatureSet(all_data, pattern = "^MT-")
-all_data_sub <- subset(all_data, subset = nFeature_RNA > 500 & nFeature_RNA < 6000 & percent.mt < 25)
-all_data_split <- SplitObject(all_data_sub, split.by = 'orig.ident')
-all_data_list <- lapply(all_data_split, function(x) { x <- SCTransform(x,verbose=FALSE)}) # if you run this you might get several iteration limit reached issues
-
-integration_features <- SelectIntegrationFeatures(all_data_list)
-all_data_list <- PrepSCTIntegration(object.list = all_data_list, anchor.features = integration_features)
-all_data_list <- lapply(X = all_data_list, FUN = RunPCA, features = integration_features)
-anchors <- FindIntegrationAnchors(object.list = all_data_list, normalization.method = "SCT", anchor.features = integration_features)
-all_data_integrated <- IntegrateData(anchorset = anchors, normalization.method = "SCT")
-
-#test_hier_clusters_exact()
-#test_clusters_approx()
-```
-
-In addition to clustering, you can use reference-mapping approaches to annotate cell types in a dataset.
-
-In this example, we map our PBMC data to a CITE-seq reference of 162,000 PBMC measured with 228 antibodies (https://www.sciencedirect.com/science/article/pii/S0092867421005833?via%3Dihub). 
-
-
-#https://satijalab.org/seurat/articles/multimodal_reference_mapping.html
-#wget https://atlas.fredhutch.org/data/nygc/multimodal/pbmc_multimodal.h5seurat
-
-Import the PBMC reference:
-
-```{r}
-reference <- LoadH5Seurat(paste0(data_dir,"/data/pbmc_multimodal.h5seurat"))
-```
-
-Loook at the metadata:
-```{r}
-head(reference@meta.data)
-```
-You can see that each cell has an 'orig.ident', which is a combination of 'donor' and 'time'.
-You can also see different 'celltype' columns, where the cell types have been assigned at different levels (e.g., B, B memory, B memory kappa).
-
-Look at the cell types
-```{r}
-DimPlot(object = reference, reduction = "wnn.umap", group.by = "celltype.l1", label = TRUE, label.size = 3, repel = TRUE) + NoLegend()
-DimPlot(object = reference, reduction = "wnn.umap", group.by = "celltype.l3", label = TRUE, label.size = 3, repel = TRUE) + NoLegend()
-
-```
-
-We then find anchors between reference and query, the reference object has already been normalized using SCTransform (which we have also used on our query PBMCs):
-The Seurat authors recommend the use of supervised PCA (spca) for CITE-seq datasets, but you can also use a standard PCA transformation.
-
-```{r}
-anchors <- FindTransferAnchors(
-  reference = reference,
-  query = all_data_integrated,
-  normalization.method = "SCT",
-  reference.reduction = "spca",
-  dims = 1:50
-)
-
-```
-We then transfer cell type labels and protein data from the reference to the query. Additionally, we project the query data onto the UMAP structure of the reference. MapQuery() is a wrapper around three functions: TransferData(), IntegrateEmbeddings(), and ProjectUMAP(). TransferData() is used to transfer cell type labels and impute the ADT ('antibody derived tag') values. IntegrateEmbeddings() and ProjectUMAP() are used to project the query data onto the UMAP structure of the reference. 
-
-
-```{r}
-all_data_integrated <- MapQuery(
-  anchorset = anchors,
-  query = all_data_integrated,
-  reference = reference,
-  refdata = list(
-    celltype.l1 = "celltype.l1",
-    celltype.l2 = "celltype.l2",
-    predicted_ADT = "ADT"
-  ),
-  reference.reduction = "spca", 
-  reduction.model = "wnn.umap"
-)
-```
-
-The reference-mapped dataset helps us identify cell types. Let's look at  plasmacytoid dendritic cells (pDC) cells:
-
-Each prediction is assigned a score between 0 and 1.
-
-```{r}
-FeaturePlot(all_data_integrated, features ="CD16 Mono",  reduction = "ref.umap", cols = c("lightgrey", "darkred"), ncol = 3) & theme(plot.title = element_text(size = 10))
-```
-
-
-
-
-
-*Gene Set Enrichment Analysis*

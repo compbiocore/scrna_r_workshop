@@ -322,18 +322,9 @@ DimPlot(all_data_merged, reduction='umap', group.by = 'orig.ident')
 
 ### Data Integration
 
-In most cases if we are looking for differences in gene expression between experimental conditions, we will actually want to integrate our datasets rather than merge them. This is because the experimental conditions can cause cells to cluster both by condition and by cell type. See https://satijalab.org/seurat/archive/v3.0/integration.html for more details. 
+In most cases if we are looking for differences in gene expression between experimental conditions, we will actually want to integrate our datasets rather than merge them. This is because the experimental conditions can cause cells to cluster both by condition and by cell type. See https://satijalab.org/seurat/articles/integration_introduction.html#introduction-to-scrna-seq-integration-1 for more details. 
 
-There are two choices for integrating data: canonical correlation analysis (CCA) and reciprocal PCA (RPCA).
-
-**CCA** is well-suited for identifying anchors when cell types are conserved, but there are very substantial differences in gene expression across experiments. CCA-based integration therefore enables integrative analysis when experimental conditions or disease states introduce very strong expression shifts, or when integrating datasets across modalities and species. However, CCA-based integration may also lead to overcorrection, especially when a large proportion of cells are non-overlapping across datasets.
-
-**RPCA**-based integration runs significantly faster, and also represents a more conservative approach where cells in different biological states are less likely to ‘align’ after integration. RPCA is recommended during integrative analysis where: 
-- A substantial fraction of cells in one dataset have no matching type in the other 
-- Datasets originate from the same platform (i.e. multiple lanes of 10x genomics) 
-- There are a large number of datasets or cells to integrate 
-
-Here, we will show how to integrate SCTransform-normalized data using `RPCA`.
+Here, we will show how to integrate SCTransform-normalized data.
 
 The first step is `SelectIntegrationFeatures()`, which ranks features by the number of datasets they are deemed variable in, breaking ties by the median variable feature rank across datasets, and returns the top scoring features by this ranking.
 
@@ -350,16 +341,9 @@ Next, we `PrepSCTIntegration`, which takes a list of objects that have been norm
 all_data_list <- PrepSCTIntegration(object.list = all_data_list, anchor.features = integration_features)
 ```
 
-Next we run PCA on all individual objects in the list:
-
-```{r}
-#run PCA on all objects in list
-all_data_list <- lapply(X = all_data_list, FUN = RunPCA, features = integration_features)
-```
-
 Find a set of anchors between a list of Seurat objects, they can later be used to integrate the objects using the IntegrateData function. Set the `reduction` to `rpca`
 ```{r}
-anchors <- FindIntegrationAnchors(object.list = all_data_list, normalization.method = "SCT", anchor.features = integration_features, reduction = 'rpca')
+anchors <- FindIntegrationAnchors(object.list = all_data_list, normalization.method = "SCT", anchor.features = integration_features)
 ```
 
 The last step is integrating the data:
