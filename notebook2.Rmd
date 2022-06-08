@@ -17,7 +17,9 @@ Similar to the standard set-up for 10x gene expression preps, CITE-seq starts wi
    
 ![sc flow](src/citeseq_str.png)
 
-The oligo-tagged antibodies look like the above figure. Once the cells are in a droplet with a bead, the bead dissolves and the poly(dT) primer will allow amplification of both the poly-adenylated mRNA and the antibody barcode library. The two cDNA pools are size-separated before library prep continues, so you'll get back a quantitative gene expression and quantitative antibody derived tag (ADT) library. The authors of CITE-seq state: "We have successfully used ~125 antibodies and do not foresee any reason why this number can’t be further increased", but as always this is dependent on the quality of your antibodies. CellRanger/10X don't formally support CITE-seq for their own reasons and suggest you contact New York Genome Center/https://cite-seq.com/ or BioLegend for help (https://support.10xgenomics.com/single-cell-gene-expression/software/pipelines/latest/using/feature-bc-analysis#feature-ref).
+The oligo-tagged antibodies look like the above figure. Once the cells are in a droplet with a bead, the bead dissolves and the poly(dT) primer will allow amplification of both the poly-adenylated mRNA and the antibody barcode library. The two cDNA pools are size-separated before library prep continues, so you'll get back a quantitative gene expression and quantitative antibody derived tag (ADT) library. The authors of CITE-seq state: "We have successfully used ~125 antibodies and do not foresee any reason why this number can’t be further increased", but as always this is dependent on the quality of your antibodies.    
+
+CellRanger/10X don't formally support CITE-seq for their own reasons and suggest you contact New York Genome Center/https://cite-seq.com/ or BioLegend for help (https://support.10xgenomics.com/single-cell-gene-expression/software/pipelines/latest/using/feature-bc-analysis#feature-ref).
 
 ![sc flow](src/cellhashing.png)
 
@@ -32,6 +34,50 @@ BioLegend cells TotalSeq kits to run cell hashing experiments. TotalSeq-B and To
 ![sc flow](src/atac_bead.png){height=175px width=500px} 
 
 The 10x Multiome ATAC + GEX kits let you look at areas of open chromatin and gene expression at the same time. They use a similar approach to the others described above, where a gel bead has primers/capture sequences for gene expression libraries and ATAC-seq libraries. The general workflow starts with isolating single nuclei (rather than single cells). Then, single nuclei are treated with a transposase that fragments DNA in open chromatin areas and adds adapter sequences to the ends of the fragments. The gel beads contain the usual Poly(dT) to amplify poly-adenylated mRNA and also a 'Spacer' sequence that acts as a capture sequence for the ATAC-seq libraries that sequence areas of open chromatin. 
+
+Let's go over the details of how the library prep works for 10x feature barcoding libaries:
+- Some of these images are really wide and are getting cut off -- feel free to follow along here: https://teichlab.github.io/scg_lib_structs/methods_html/10xChromium3fb.html
+
+![sc bead](src/fbc_step1.png)
+
+The first step is sequence capture by the poly(dT) and Capture Sequence 1 or 2 and MMLV (Moloney Murine Leukemia Virus) reverse transcription.
+
+![sc bead](src/fbc_step2.png)
+
+
+Just like the previous discussion of the GE libraries, MMLV adds extra Cs
+
+![sc bead](src/fbc_step3.png)
+The template-switching oligo is added so we can continue across the other strand.
+
+![sc bead](src/fbc_step4.png)
+Adding the primers to amplify cDNA
+
+![sc bead](src/fbc_step5.png)
+At this point your different products will be different sizes so you can separate with size selection, unless its a CRISPR screen library --these need some extra PCR steps:
+
+![sc bead](src/fbc_step6.png)
+If you do have a CRISPR screen library, perform that extra PCR step.
+
+![sc bead](src/fbc_step7.png)
+
+Add the primers for library PCR to the products from step 5 (step 6 if CRISPR library).
+
+![sc bead](src/fbc_step8.png)
+
+Here's the final library structures for mRNA, surface protein libraries that use capture sequence 1, or CRISPR screen library.
+
+![sc bead](src/fbcseq_step1.png)
+
+For the sequencing, add the read 1 primers to sequence read 1 using the bottom strand as template sequences the cell barcode and UMI.
+
+![sc bead](src/fbcseq_step2.png)
+
+Sample index primer sequences the sample index from bottom strand (getting cut off for the surface protein and CRISPR libraries but all libraries do this step)
+
+![sc bead](src/fbcseq_step3.png)
+Cluster regeneration and add read 2 primer, sequences second read from the top strand (CRISPR library is getting cut off but you can view the source image at https://teichlab.github.io/scg_lib_structs/methods_html/10xChromium3fb.html).
+
 
 ###############################################
 
@@ -63,6 +109,8 @@ library(plotly)
 library(iDEA)
 library(fgsea)
 library(clusterpval)
+library(msigdbr)
+
 library('pbmc3k.SeuratData')
 library('cbmc.SeuratData')
 library('ifnb.SeuratData')
@@ -71,7 +119,6 @@ data("pbmc3k")
 data("cbmc")
 data("ifnb")
 data("panc8")
-
 
 ```
 
@@ -82,7 +129,7 @@ cbmc
 
 - This data has already come with the ADT assay added, which you'd have to add on your own if you were working with your own data.
 - To do that, you'd use the `Read10x` or `Read10X_h5` functions to import your GE and ADT libraries. 
-- At this point you might want to do some filtering on your data to get back cell barcodes where you've got RNA and ADT data.
+- At this point you might want to do some filtering on your data to get back cell barcodes where you've got both RNA and ADT data.
 - That might look like this (I've commented out the code here since it won't actually run, you can see the Seurat vignette here https://satijalab.org/seurat/articles/hashing_vignette.html, which shows how to demultiplex cell hashing data):
 
 First, read in the 10X data
@@ -120,7 +167,7 @@ head(rownames(cbmc@assays$RNA))
 head(colnames(cbmc@assays$RNA))
 ```
 
-For ADT assay, cells columns and rows are cell surface proteins.
+For ADT assay, cells are columns and the rows are cell surface proteins
 ```{r}
 rownames(cbmc@assays$ADT)
 head(colnames(cbmc@assays$ADT))
@@ -143,10 +190,11 @@ cbmc <- RunTSNE(cbmc, tsne.method = "FIt-SNE", seed.use=61)
 DimPlot(cbmc, label = TRUE)
 ```
 
-We'll also normalize the CITE-seq ADT dat. We'll use a CLR or centered log ratio transformation. 
+We'll also normalize the CITE-seq ADT data. We'll use a CLR or centered log ratio transformation (https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5669064/). The `margin` argument indicates if you are normalizing across `features` (margin = 1) or `cells` (margin = 2). The authors of Seurat recommend normalizing across cells in most cases unless there's a big difference in the ADT counts across cells, but note that gene-based normalization can fail if there's differences in sequencing depth or cell size. (https://github.com/satijalab/seurat/issues/2954, https://github.com/satijalab/seurat/issues/871). 
+
 ```{r}
 DefaultAssay(cbmc) <- "ADT"
-cbmc <- NormalizeData(cbmc, normalization.method = "CLR")
+cbmc <- NormalizeData(cbmc, normalization.method = "CLR", margin = 2)
 ```
 
 Then we can visualize our data -- let's look at the CD19 RNA and Protein expression:
@@ -190,6 +238,9 @@ rna_markers <- FindMarkers(cbmc, ident.1 = 10, assay = "RNA")
 head(rna_markers)
 head(adt_markers)
 ```
+We see that there are some cell types that express CD19 on their cell surfaces and that information is also reflected in the RNA data, where there's a higher expression of the CD19 gene.
+
+
 
 Let's clear the `cbmc` data before we move on.
 
@@ -216,7 +267,7 @@ We can try working though running clusterpval. First, we will filter the pbmc3k 
 
 pbmc3k
 pbmc3k_sub <- subset(pbmc3k, subset = nFeature_RNA > 1000 & nFeature_RNA < 7000 )
-pbmc3k_sub <- SCTransform(pbmc3k_sub,verbose=FALSE)
+pbmc3k_sub <- SCTransform(pbmc3k_sub,verbose=FALSE,return.only.var.genes = FALSE)
 pbmc3k_sub <- RunPCA(pbmc3k_sub)
 pbmc3k_sub <- FindNeighbors(pbmc3k_sub, dims = 1:8)
 pbmc3k_sub <- FindClusters(pbmc3k_sub)
@@ -225,34 +276,20 @@ pbmc3k_sub <- RunTSNE(pbmc3k_sub, tsne.method = "FIt-SNE", seed.use=61)
 DimPlot(pbmc3k_sub, label = TRUE)
 
 ```
-
-Then we can run clusterpval. Let's get out the clusters:
-
+Let's try running clusterpval. First, assign the clusters to `cluster` and change the default assay (use `integrated` if you have integrated data). We also make a function called `function_cluster` that will use a random seed to generate a new set of clustering for our Seurat object each time its run. We use this function as an argument to the `test_clusters_approx` function from clusterpval, which approximates p-values for the clusters via importance sampling. We'll run it with 100 draws for the sake of time.
 ```{r}
 clusters <-pbmc3k_sub@meta.data[["seurat_clusters"]]
-```
-
-Set the default assay to be `RNA` (if you are working with an integrated dataset, use the `integrated` assay) and set a seed.
-```{r}
-DefaultAssay(pbmc3k_sub) <- "RNA"
-```
-
-clusterpval requires a clustering function as an argument. Here, we write out our clustering function, where we set a random seed, run `FindClusters`, and return the Seurat clusters.
-
-```{r}
+DefaultAssay(pbmc3k_sub) <- "SCT"
+set.seed(581762)
 function_cluster <- function(x) {
     seed = sample.int(999999, size=1)
-    tmp <- Seurat::FindClusters(pbmc3k_sub, random.seed=seed)
+    tmp <- FindClusters(pbmc3k_sub, random.seed=seed)
     return(tmp@meta.data[["seurat_clusters"]])
 }
+tc <- test_clusters_approx(as.matrix(pbmc3k_sub@assays[["RNA"]]@counts),
+                     k1=3, k2=1, cl=clusters, cl_fun=function_cluster, ndraws=100)
 ```
 
-Here we can use the `test_clusters_approx` function and approximates the p-values for the clusters via importance sampling.
-```{r, message=FALSE, warnings=FALSE, results='hide'}
-tc <- test_clusters_approx(
-  as.matrix(pbmc3k_sub@assays[["RNA"]]@counts),
-  k1=1, k2=3, cl=clusters, cl_fun=function_cluster, ndraws=100)
-```
 ```{r}
 tc
 ```
@@ -288,22 +325,19 @@ pancreas.list <- lapply(pancreas.list, function(x) {
     x <- SCTransform(x,verbose=FALSE,return.only.var.genes = FALSE)}) 
 ```
 
-To construct a reference, we will identify ‘anchors’ between the individual datasets. We'll pick 3 of the objects to construct our inegrated reference and 1 will be the query.
+To construct a reference, we will identify ‘anchors’ between the individual datasets. We'll pick three of the objects to construct our integrated reference and save one for using as a query later.  
 ```{r}
 pancreas.ref <- c(pancreas.list$celseq, pancreas.list$celseq2, pancreas.list$smartseq2)
 pancreas.query <- pancreas.list$fluidigmc1
 ```
 
-Then we can `SelectIntegrationFeatures`, `PrepSCTIntegration`, `FindIntegrationAnchors`, and `IntegrateData`.
+Then we can `SelectIntegrationFeatures`, `PrepSCTIntegration`, `FindIntegrationAnchors`, and `IntegrateData`, Run PCA and UMAP
 ```{r}
 integration_features <- SelectIntegrationFeatures(pancreas.ref)
 pancreas.ref <- PrepSCTIntegration(object.list = pancreas.ref, anchor.features = integration_features)
 ref.anchors <- FindIntegrationAnchors(object.list = pancreas.ref , normalization.method = "SCT", anchor.features = integration_features)
 pancreas.ref <- IntegrateData(anchorset = ref.anchors, normalization.method = "SCT")
-```
 
-Run PCA and UMAP
-```{r}
 pancreas.ref <- RunPCA(pancreas.ref, verbose = FALSE)
 pancreas.ref <- RunUMAP(pancreas.ref, reduction = "pca", dims = 1:20, verbose = FALSE)
 
@@ -314,7 +348,7 @@ p1 / p2
 ```
 
 
-Seurat also supports the projection of reference data (or meta data) onto a query object. While many of the methods are conserved (both procedures begin by identifying anchors), there are two important distinctions between data transfer and integration:
+Seurat supports the projection of reference data onto a query object. While many of the methods are conserved (both procedures begin by identifying anchors), there are two important distinctions between data transfer and integration:
 
     In data transfer, Seurat does not correct or modify the query expression data.
     In data transfer, Seurat has an option (set by default) to project the PCA structure of a reference onto the query, instead of learning a joint structure with CCA. We generally suggest using this option when projecting data between scRNA-seq datasets.
@@ -347,6 +381,14 @@ pancreas.query$prediction.match <- pancreas.query$predicted.id == pancreas.query
 table(pancreas.query$prediction.match)
 ```
 
+Lets clean up a little before we continue:
+```{r}
+rm(panc8)
+rm(pancreas.list)
+rm(pancreas.ref)
+rm(pancreas.query)
+```
+
 ##############################
 
 ## Gene set enrichment analysis
@@ -368,6 +410,7 @@ Here we'll talk about some GSEA methods you can use with your single cell data. 
 Let's try running some GSEA analyses on the `ifnb` data. Let's run through the standard data processing pipeline and run `FindMarkers` to compare `STIM` to `CTRL`.
 
 ```{r}
+ifnb
 ifnb_sub <- subset(ifnb, subset = nFeature_RNA > 1000 & nFeature_RNA < 7000 )
 ifnb.list <- SplitObject(ifnb_sub, split.by = 'stim')
 ifnb.list <- lapply(ifnb.list, function(x) {
@@ -389,27 +432,118 @@ ifnb_integrated <- FindClusters(ifnb_integrated)
 ifnb_integrated <- RunUMAP(ifnb_integrated, dims = 1:10)
 ifnb_integrated <- RunTSNE(ifnb_integrated, tsne.method = "FIt-SNE", seed.use=61)
 ```
+
+When you run differential expression for this type of analysis, make sure you modify the default settings for `FindMarkers` -- it will do some filtering of your data and so will report back a smaller subset of genes.
 ```{r}
 DefaultAssay(ifnb_integrated) <- 'RNA'
 Idents(ifnb_integrated) <- 'stim'
-
-ctl_vs_stim <- FindMarkers(ifnb_integrated, ident.1 = 'CTRL', ident.2 = 'STIM', min.pct = 0.95, logfc.threshold = log(2))
-ctl_vs_stim$zscore <- qnorm(ctl_vs_stim$p_val/2.0, lower.tail=FALSE)
-ctl_vs_stim$se <- abs(ctl_vs_stim$avg_log2FC/ctl_vs_stim$zscore)
-ctl_vs_stim$beta_var <- ctl_vs_stim$se^2
-#from https://github.com/xzhoulab/iDEA/issues/4
+#run DE testing with modified settings -- by default FindMarkers will filter out genes that are lowly expressed, etc. and we don't want that -- we want all the stats.
+ctl_vs_stim <- FindMarkers(ifnb_integrated, ident.1 = 'CTRL', ident.2 = 'STIM', min.cells.group = 1, min.cells.feature = 1, min.pct = 0, logfc.threshold = 0, only.pos = FALSE)
 ```
 
-#pick this gene set https://www.gsea-msigdb.org/gsea/msigdb/cards/REACTOME_INTERFERON_SIGNALING
+One package to run these analyses is iDEA (https://xzhoulab.github.io/iDEA/), which performs joint estimation of differential expression and gene set enrichment. It assumes you have already run differential expression analysis and expects an input of gene-level summary stats -- the fold changes and their variances. Here we can calculate that information from our Seurat output:
+
+```{r}
+ctl_vs_stim$zscore <- qnorm(ctl_vs_stim$p_val/2.0, lower.tail=FALSE) #### convert the pvalue to z-score
+ctl_vs_stim$beta <- ctl_vs_stim$avg_log2FC
+ctl_vs_stim$se_beta <- abs(ctl_vs_stim$beta/ctl_vs_stim$zscore)
+ctl_vs_stim$beta_var <- ctl_vs_stim$se_beta^2
+summary <- data.frame(beta = ctl_vs_stim$beta, beta_var = ctl_vs_stim$beta_var)
+rownames(summary) <- rownames(ctl_vs_stim)
+summary$gene_symbol <- rownames(summary) 
+```
+
+We will use the msigdbr R package for this next section. It provides Molecular Signatures Database (MSigDB) gene sets typically used with the Gene Set Enrichment Analysis (GSEA) software (see https://www.gsea-msigdb.org/gsea/msigdb/). The gene sets are divided into collections:
+
+H 	hallmark gene sets  are coherently expressed signatures derived by aggregating many MSigDB gene sets to represent well-defined biological states or processes.
+C1 	positional gene sets  for each human chromosome and cytogenetic band.
+C2 	curated gene sets  from online pathway databases, publications in PubMed, and knowledge of domain experts.
+C3 	regulatory target gene sets  based on gene target predictions for microRNA seed sequences and predicted transcription factor binding sites.
+C4 	computational gene sets  defined by mining large collections of cancer-oriented microarray data.
+C5 	ontology gene sets  consist of genes annotated by the same ontology term.
+C6 	oncogenic signature gene sets  defined directly from microarray gene expression data from cancer gene perturbations.
+C7 	immunologic signature gene sets  represent cell states and perturbations within the immune system.
+C8 	cell type signature gene sets  curated from cluster markers identified in single-cell sequencing studies of human tissue.
+
+First, let's see what gene sets are available for human: 
+
+```{r}
+all_gene_sets <- msigdbr(species = "Homo sapiens")
+all_gene_sets 
+```
+
+I know already that I want to look for genes enriched in this category: https://www.gsea-msigdb.org/gsea/msigdb/cards/REACTOME_INTERFERON_SIGNALING, we know the category and subcategory, so lets filter to just get those sets:
+
+```{r}
+all_gene_msig <- msigdbr(species = "Homo sapiens",category = "C2", subcategory = "CP:REACTOME")
+```
+
+For the sake of getting things to run in a reasonable time for this workshop, let's narrow things down a little more and just pick a few gene modules. We can see what options are available:
+```{r}
+unique(all_gene_msig$gs_description)
+
+filtered_genes <- all_gene_msig %>% dplyr::filter(gs_description == 'Interferon Signaling' | gs_description == 'Glycolysis' | gs_description == 'Fatty acid metabolism') %>% dplyr::distinct(gs_name, gene_symbol)
+```
+
+For the input to our GSEA program we need a matrix of data where the rows are genes, the columns are pathways or modules of genes, and the dataframe is filled with 1 and 0 for presence/absence. Let's do some wrangling to get things in the right format.
+
+```{r}
+
+#set all to 1
+filtered_genes$value <- 1
+```
+
+```{r}
+#pivot wider and fill in empy rows with 0
+annots <- as.data.frame(tidyr::pivot_wider(filtered_genes, id_cols=gene_symbol,names_from=gs_name, values_from=value, values_fill=0)) 
+```
+
+Filter so that the rownames of annots and summary stats match exactly because this is what iDEA expects. 
+```{r}
+joint.genes <- intersect(summary[,3], annots[,1])
+sum_stats_sub <- summary %>% filter(gene_symbol %in% joint.genes)
+annots_sub <- annots %>% filter(gene_symbol %in% joint.genes)
+
+rownames(sum_stats_sub) <- sum_stats_sub$gene_symbol 
+sum_stats_sub$gene_symbol <- NULL
+
+rownames(annots_sub) <- annots_sub$gene_symbol
+annots_sub$gene_symbol <- NULL
+```
 
 
-all_gene_sets <- msigdbr()
+```{r}
+idea <- CreateiDEAObject(as.data.frame(sum_stats_sub), as.data.frame(annots_sub))
+```
 
 
-Idents(sct.combined) <- "seurat_clusters"
-wt_vs_mut_null <- FindMarkers(sct.combined, ident.1 = "WT", ident.2 = "MUT",
-                       group.by="treatment", subset.ident="2", test.use="MAST")
-sum_wt_vs_mut_null <- stderr(wt_vs_mut_null)
+#bump mcmc_iter to 100 to help things go faster
+```{r}
+idea <- iDEA.fit(idea,
+	         mcmc_iter=100, 
+	         verbose=TRUE)
+```
+Add corrected pvalues
+```{r}
+idea <- iDEA.louis(idea)
+```
+
+Look at the results for the gene sets
+```{r}
+idea@gsea
+```
+The sign in `annot_coef` tells you whether this pathway has DE genes in it, regardless of the strength of the up or down regulation. 
+
+
+pip <- unlist(idea@de[["REACTOME_INTERFERON_SIGNALING"]]$pip)
+
+
+### posterior inclusion probability of a gene being DE gene.
+pip = unlist(idea@de[["GO_REGULATION_OF_CANONICAL_WNT_SIGNALING_PATHWAY"]]$pip)
+### head the posterior inclusion probability for each gene
+head(pip)
+idea@de$REACTOME_INTERFERON_SIGNALING$beta idea@de$REACTOME_INTERFERON_SIGNALING$pip
+
 
 
 We also run a more standard GSEA analysis, on just the Hallmark gene sets. There is an open question of how to create a ranked list for this analysis. We started with avg_logFC as was suggested in issue#50 on the fgsea repo, but it returned no significant pathways at all, which does not seem right for our comparisons also given Table \@ref(tab:de-markers). This may be because in the discussion avg_logFC was suggested when comparing markers just between cell type clusters, but we are also actually comparing between different treatment types. Another option was to use -sign(avg_log2FC)*log10(p_val_adj), which incorporates both logfoldchange and the pvalue. This approach seemed more reasonable and yielded results more similar to iDEA.
