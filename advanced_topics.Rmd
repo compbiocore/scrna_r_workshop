@@ -1,3 +1,16 @@
+---
+title: "Advanced topics in single-cell analysis"
+author: "Joselynn Wallace and August Guang"
+output:
+    bookdown::html_document2:
+        toc: true
+    bookdown::pdf_document2:
+        keep_tex: true
+    bookdown::word_document2:
+        toc:true
+bibliography: "workshop.bib"
+---
+
 # Advanced Topics in scRNAseq 
 
 What we'll cover:
@@ -5,8 +18,7 @@ What we'll cover:
     - Working with multimodal data
     - Controlling for Type I error in estimated clusters with clusterpval
     - Classifying cell types with a reference atlas with TransferAnchors from Seurat    
-    - Gene set enrichment analysis with fgsea
-    - Joint estimation of differential expression and gene set enrichment with iDEA
+    - Pathway analysis (ORA, GSEA, iDEA)
     
 ## Parallelization options for Seurat and other packages
 
@@ -18,11 +30,16 @@ library(future)
 plan()
 ```
 
+We set workers=8 because we've requested 8 cores. Additionally, we set `multisession` instead of `multiprocess` despite what the vignette says, because `multiprocess` is actually deprecated in `future` and we should be explicitly specifying `multisession` or `multicore` instead. Getting into the difference is out of scope of this workshop, but you can [read more](https://cran.r-project.org/web/packages/future/vignettes/future-1-overview.html) on future yourself if interested.
+
 ```{r}
-# change the current plan to access 
+# change the current plan to access parallelization
+plan("multisession", workers = 4)
+plan()
 ```
     
-### Working with multimodal data
+## Working with multimodal data
+
 Multimodal scRNA-seq is a quickly evolving field that allows simultaneous measurements of multiple types of information from a given cell. We won't discuss these exhaustively, but will briefly cover CITE-seq, cell hashing, and the 10x ATAC + GEX Multiome kits.
 
 **CITE-seq and Cell Hashing**
@@ -265,22 +282,20 @@ rm(cbmc)
 ```
 
 
-### Controlling for Type I error in estimated clusters with clusterpval
+## Controlling for Type I error in estimated clusters with clusterpval
+
 The first part of this workshop ran through how to use Seurat to cluster the cells. The first step is running a PCA (`RunPCA`), which then gets used as the input for the `FindNeighbors` function. `FindNeighbors` constructs a KNN graph based on the euclidean distance in PCA space and refines the edge weights between any two cells based on the shared overlap in their local neighborhoods (Jaccard similarity). The next step is `FindClusters`, where we apply the Louvain algorithm to iteratively group cells together, with the goal of optimizing the standard modularity function. 
 
 After we have grouped the cells, we might want to ask questions about the clusters -- for example, are there differentially expressed genes across clusters? **This gets us into 'double-dipping' territory.** We have clustered the cells based on their gene expression and then want to ask questions about which genes are differentially expressed across those groups. We are generating hypotheses based on the data and then testing the hypotheses on the same data. This can lead to an uncontrolled type I error rate when using classical hypothesis tests like the Wilcoxon test. 
 
 We can use a program called `clusterpval` to check whether the difference in means of the clusters is significant. [@Gao2021] This is meant to partially address the problem of "double dipping," where the same data used to cluster and thus form groups is then used again for post-clustering analysis with the clusters designated as the groups. The method adjusts the pvalue for difference in means of the clusters. However it does not adjust pvalues for differential expression analysis, or difference in means of a subset of the data (i.e. genes), which would be what we actually want to do. Nevertheless it can be used as a check on the validity of the clusters.
 
-We follow the code from [issue#2](https://github.com/lucylgao/clusterpval/issues/2) on the `clusterpval` repo. They are working on an [implementation for expression analysis](https://github.com/lucylgao/clusterpval/issues/3). Unfortunately the code isn't parallelized so it takes a while to run even with 100 draws, (was not willing to try 1000) but the pvalues returned are NaN (with a test statistic of around 17) so cluster 2 is likely real. It is also the most distinct cluster on the UMAP plots (Figure \@ref(fig:dimplot-reg)). My implementation of the clustering function also doesn't start from the counts matrix, it starts from the integrated data and just runs `FindClusters` with a different random seed each time, so that may impact results as well. Looking into this further can be a later individual question.
-
-
+We largely follow the code from [issue#2](https://github.com/lucylgao/clusterpval/issues/2) on the `clusterpval` repo. They are working on an [implementation for expression analysis](https://github.com/lucylgao/clusterpval/issues/3), so what this will tell you now is mostly whether your clusters are significant or not. My implementation of the clustering function doesn't start from the counts matrix, it starts from the integrated data and just runs `FindClusters` with a different random seed each time, so that may impact results as well. This is to speed up computation.
 
 We can try working though running clusterpval. First, we will filter the pbmc3k data to keep it very small and then quickly run through normalization, clustering, and dimension reduction.
 
 
 ```{r}
-
 pbmc3k
 pbmc3k_sub <- subset(pbmc3k, subset = nFeature_RNA > 1000 & nFeature_RNA < 7000 )
 pbmc3k_sub <- SCTransform(pbmc3k_sub,verbose=FALSE,return.only.var.genes = FALSE)
@@ -292,7 +307,11 @@ pbmc3k_sub <- RunTSNE(pbmc3k_sub, tsne.method = "FIt-SNE", seed.use=61)
 DimPlot(pbmc3k_sub, label = TRUE)
 
 ```
-Let's try running clusterpval. First, assign the clusters to `cluster` and change the default assay (use `integrated` if you have integrated data). We also make a function called `function_cluster` that will use a random seed to generate a new set of clustering for our Seurat object each time its run. We use this function as an argument to the `test_clusters_approx` function from clusterpval, which approximates p-values for the clusters via importance sampling. We'll run it with 100 draws for the sake of time.
+
+Let's try running clusterpval. First, assign the clusters to `cluster` and change the default assay (use `integrated` if you have integrated data). We also make a function called `function_cluster` that will use a random seed to generate a new set of clustering for our Seurat object each time its run. We use this function as an argument to the `test_clusters_approx` function from clusterpval, which approximates p-values for the clusters via importance sampling. We'll run it with 1000 draws for the sake of time. Arguments to `test_clusters_approx` are the counts matrix, `k1` and `k2` the cluster IDs we want to test for (here we are testing cluster 3 vs cluster 1), the original clustering results, and a function to rerun clustering on our data.
+
+`clusterpval` is parallelized using `future_lapply` in the same way that several of the Seurat functions are parallelized using `future`, so the `multisession` plans we set above will apply here as well.
+
 ```{r}
 clusters <-pbmc3k_sub@meta.data[["seurat_clusters"]]
 DefaultAssay(pbmc3k_sub) <- "SCT"
@@ -303,7 +322,7 @@ function_cluster <- function(x) {
     return(tmp@meta.data[["seurat_clusters"]])
 }
 tc <- test_clusters_approx(as.matrix(pbmc3k_sub@assays[["RNA"]]@counts),
-                     k1=3, k2=1, cl=clusters, cl_fun=function_cluster, ndraws=100)
+                     k1=3, k2=1, cl=clusters, cl_fun=function_cluster, ndraws=1000)
 ```
 
 ```{r}
@@ -315,12 +334,13 @@ pval: the approximate p-value
 stderr: standard error of the p-value estimate
 clusters: the estimated cluster assignments
 
-We are getting back NaN for the pvalues, likely because we are using only 100 draws because we have limited time/oscar resources for the workshop.
+We are getting back NaN for the pvalues, likely because we are using only 1000 draws because we have limited time/oscar resources for the workshop.
 The authors are working on an implementation for expression analysis what would allow this method to perform differential expression p-value correction, but it is not functional as yet (https://github.com/lucylgao/clusterpval/issues/3).
 
 ##############################
 
 ## Working with TransferAnchors from Seurat 
+
 Seurat has a few built in methods to identify shared cell states present across different datasets. They can be different conditions, different individuals, technologies, etc. First, Seurat tries to find anchors between pairs of datasets. These represent pairwise correspondences between individual cells (one in each dataset), that Seurat hypothesizes originate from the same biological state. These ‘anchors’ are then used to harmonize the datasets, or transfer information from one dataset to another. In the first part of this workshop, we went over running data integration with SCTransform-normalized datasets from different experiments. In this follow up session, we will go over how you can leverage an integrated reference dataset to annotate new query datasets. This can be helpful for using cell atlases to annotate cell types in your experimental datasets.
 
 We'll work with the `panc8` data.
@@ -407,23 +427,22 @@ rm(pancreas.query)
 
 ##############################
 
-## Gene set enrichment analysis
+## Pathway / gene set analysis
 
-Gene set enrichment analysis attempts to identify genes that are over-represented in a set of genes that make up pathways associated with various mechanisms. You can think of it like this: if a particular pathway consists of 300 genes, and 280 of those 300 genes are in our list of differentially expressed genes, then is that pathway relevant to the differences between our groups of interest?
+Pathway analysis, sometimes known as gene set analysis, attempts to identify genes that are over-represented in a set of genes that make up pathways associated with various mechanisms. You can think of it like this: if a particular pathway consists of 300 genes, and 280 of those 300 genes are in our list of differentially expressed genes, then is that pathway relevant to the differences between our groups of interest?
 
-Two commonly used methods to look for enrichment are overrepresentation analysis (ORA) or gene set enrichment analysis (GSEA). 
-- Over Representation Analysis (ORA) looks for functions or processes that are over-represented (= enriched) in an experimentally-derived gene list (e.g. all differentially expressed genes) relative to a background gene list (e.g. all genes in the dataset) (https://academic.oup.com/bioinformatics/article/20/18/3710/202612?login=true). 
-- Gene Set Enrichment (GSEA) takes a ranked list of genes (e.g. all genes in the differential expression analysis sorted by log fold change or test statistic or some other metric) and calculates an enrichment score based on whether a gene set is over-represented at the top or bottom of the list (https://www.ncbi.nlm.nih.gov/pmc/articles/PMC1239896/).
+Two commonly used methods to look for enrichment are overrepresentation analysis (ORA) or gene set enrichment analysis (GSEA).
 
-ORA will miss smaller but coordinated changes in pathways -- so, when a pathway doesn't contain many differentially expressed genes, but all the genes in the pathway change together.
+- Over Representation Analysis (ORA) looks for functions or processes that are over-represented (= enriched) in an experimentally-derived gene list (e.g. all differentially expressed genes) relative to a background gene list (e.g. all genes in the dataset). 
+- Gene Set Enrichment (GSEA) takes a ranked list of genes (e.g. all genes in the differential expression analysis sorted by log fold change or test statistic or some other metric) and calculates an enrichment score based on whether a gene set is over-represented at the top or bottom of the list.
 
-Here we'll talk about some GSEA methods you can use with your single cell data. Some of the details of the implementation can vary, but the core results some such analyses are:
+ORA will miss smaller but coordinated changes in pathways -- so, when a pathway doesn't contain many differentially expressed genes, but all the genes in the pathway change together. GSEA is designed to catch these - however how to rank genes is an open question with variable results.
 
-    Enrichment score (ES) - a representation of how overrepresented a gene set is at the top or bottom of the ranked list.
-    p-value of ES - the significance of the score for that gene set
-    Adjusted p-value - an adjusted p-value to account for multiple hypothesis testing of multiple gene sets
+A third method specifically designed for single-cell is integrated differential expression and gene set enrichment analysis (iDEA) [@Ma2020], which we will go into further below. Here we'll talk about these three methods as applied to single cell data.
 
-Let's try running some GSEA analyses on the `ifnb` data. Let's run through the standard data processing pipeline and run `FindMarkers` to compare `STIM` to `CTRL`.
+### Preparing data
+
+All pathways analysis methods start with a list of gene markers. GSEA and iDEA also require summary statistics associated with the gene markers. As such we will compute markers first, on the `ifnb` data. Let's run through the standard data processing pipeline and run `FindMarkers` to compare `STIM` to `CTRL`.
 
 ```{r}
 ifnb
@@ -449,27 +468,16 @@ ifnb_integrated <- RunUMAP(ifnb_integrated, dims = 1:10)
 ifnb_integrated <- RunTSNE(ifnb_integrated, tsne.method = "FIt-SNE", seed.use=61)
 ```
 
-When you run differential expression for this type of analysis, make sure you modify the default settings for `FindMarkers` -- it will do some filtering of your data and so will report back a smaller subset of genes.
+When you run differential expression for this type of analysis, make sure you modify the default settings for `FindMarkers`, otherwise it will do some filtering of your data and so will report back a smaller subset of genes. Additionally, make sure the assay you run `FindMarkers` on is the `RNA` assay rather than `SCT` or `Integrated`. Here we also use the option `test.use="MAST"` to use MAST [@Finak2015], a method developed specifically for differential expression analysis in single-cell data.
+
 ```{r}
 DefaultAssay(ifnb_integrated) <- 'RNA'
 Idents(ifnb_integrated) <- 'stim'
 #run DE testing with modified settings -- by default FindMarkers will filter out genes that are lowly expressed, etc. and we don't want that -- we want all the stats.
-ctl_vs_stim <- FindMarkers(ifnb_integrated, ident.1 = 'CTRL', ident.2 = 'STIM', min.cells.group = 1, min.cells.feature = 1, min.pct = 0, logfc.threshold = 0, only.pos = FALSE)
+ctl_vs_stim <- FindMarkers(ifnb_integrated, ident.1 = 'CTRL', ident.2 = 'STIM', test.use="MAST", min.cells.group = 1, min.cells.feature = 1, min.pct = 0, logfc.threshold = 0, only.pos = FALSE)
 ```
 
-One package to run these analyses is iDEA (https://xzhoulab.github.io/iDEA/), which performs joint estimation of differential expression and gene set enrichment. It assumes you have already run differential expression analysis and expects an input of gene-level summary stats -- the fold changes and their variances. Here we can calculate that information from our Seurat output:
-
-```{r}
-ctl_vs_stim$zscore <- qnorm(ctl_vs_stim$p_val/2.0, lower.tail=FALSE) #### convert the pvalue to z-score
-ctl_vs_stim$beta <- ctl_vs_stim$avg_log2FC
-ctl_vs_stim$se_beta <- abs(ctl_vs_stim$beta/ctl_vs_stim$zscore)
-ctl_vs_stim$beta_var <- ctl_vs_stim$se_beta^2
-summary <- data.frame(beta = ctl_vs_stim$beta, beta_var = ctl_vs_stim$beta_var)
-rownames(summary) <- rownames(ctl_vs_stim)
-summary$gene_symbol <- rownames(summary) 
-```
-
-We will use the msigdbr R package for this next section. It provides Molecular Signatures Database (MSigDB) gene sets typically used with the Gene Set Enrichment Analysis (GSEA) software (see https://www.gsea-msigdb.org/gsea/msigdb/). The gene sets are divided into collections:
+The other input that all of these analyses require is a list of gene sets or pathways of interest. We will use the msigdbr R package. It provides Molecular Signatures Database (MSigDB) gene sets typically used with the Gene Set Enrichment Analysis (GSEA) software (see https://www.gsea-msigdb.org/gsea/msigdb/). The gene sets are divided into collections:
 
 H 	hallmark gene sets  are coherently expressed signatures derived by aggregating many MSigDB gene sets to represent well-defined biological states or processes.
 C1 	positional gene sets  for each human chromosome and cytogenetic band.
@@ -495,10 +503,69 @@ all_gene_msig <- msigdbr(species = "Homo sapiens",category = "C2", subcategory =
 ```
 
 For the sake of getting things to run in a reasonable time for this workshop, let's narrow things down a little more and just pick a few gene modules. We can see what options are available:
+
 ```{r}
 unique(all_gene_msig$gs_description)
 
-filtered_genes <- all_gene_msig %>% dplyr::filter(gs_description == 'Interferon Signaling' | gs_description == 'Glycolysis' | gs_description == 'Fatty acid metabolism') %>% dplyr::distinct(gs_name, gene_symbol)
+filtered_genes <- all_gene_msig %>% dplyr::filter(gs_description == 'Interferon Signaling' | gs_description == 'Glycolysis' | gs_description == 'Fatty acid metabolism' | gs_description=="Polymerase switching") %>% dplyr::distinct(gs_name, gene_symbol)
+```
+
+How these gene sets should be formatted varies for each type of package, so we will leave the details for that later.
+
+### Overrepresentation analysis
+
+Overrepresentation analysis (ORA) actually has quite a simple formula to compute the p-value for a given gene set. If N is the total number of genes in the background distribution (the list of all genes across all the gene sets), M the number of genes within the gene set that are in the background, n the size of the list of DE gnes, and k the number of DE genes that are in the gene set, then the p-value can be computed with the hypergeometric distribution
+
+$$ p = 1 - \sum_{i=0}^{k-1} \frac{\binom{M}{i} \binom{N-M}{n-i}}{\binom{N}{n}} $$
+p-values should then be adjusted for multiple comparison.
+
+We will use the package `clusterProfiler` to do this computation as well as adjust. Since in ORA we only want the list of DE genes, we filter out `ctl_vs_stim` to only keep genes with pvalue < 0.05. With this list and the `filtered_genes` dataframe from `misgdbr` we have enough inputs for the `clusterProfiler::enricher` function to do our analysis.
+
+```{r}
+library(clusterProfiler)
+de_genes <- filter(ctl_vs_stim, p_val_adj < 0.05) %>% rownames()
+ora <- enricher(gene=de_genes, pvalueCutoff = 0.05, pAdjustMethod="BH",
+         TERM2GENE=filtered_genes)
+ora@result
+```
+
+As we can see, the interferon signaling pathway has a significant pvalue, but the other 3 pathways do not. The results also include a GeneRatio and a BgRatio, corresponding to M/N and k/n respectively. This is in line with our expectations. Although ORA is rather simple, it's a good first step to check your expectations quickly before moving on to more complicated analyses.
+
+### Gene set enrichment analysis (GSEA)
+
+GSEA is a more in-depth method that can 
+
+    Enrichment score (ES) - a representation of how overrepresented a gene set is at the top or bottom of the ranked list.
+    p-value of ES - the significance of the score for that gene set
+    Adjusted p-value - an adjusted p-value to account for multiple hypothesis testing of multiple gene sets
+
+- Gene Set Enrichment (GSEA) takes a ranked list of genes (e.g. all genes in the differential expression analysis sorted by log fold change or test statistic or some other metric) and calculates an enrichment score based on whether a gene set is over-represented at the top or bottom of the list.
+
+ORA will miss smaller but coordinated changes in pathways -- so, when a pathway doesn't contain many differentially expressed genes, but all the genes in the pathway change together.
+
+
+
+We also run a more standard GSEA analysis, on just the Hallmark gene sets. There is an open question of how to create a ranked list for this analysis. We started with avg_logFC as was suggested in issue#50 on the fgsea repo, but it returned no significant pathways at all, which does not seem right for our comparisons also given Table \@ref(tab:de-markers). This may be because in the discussion avg_logFC was suggested when comparing markers just between cell type clusters, but we are also actually comparing between different treatment types. Another option was to use -sign(avg_log2FC)*log10(p_val_adj), which incorporates both logfoldchange and the pvalue. This approach seemed more reasonable and yielded results more similar to iDEA.
+iDEA
+
+GSEA and ORA are dependent on an initial differential expression analysis. However, the differential expression of an individual gene also has an obvious dependence on gene set enrichment, as gene sets contain information about the individual genes within the set. iDEA (integrative Differental expression and gene set Enrichment Analysis) addresses this joint dependence through a model that jointly estimates both differential expression and gene set enrichment. The input to this method is still a list of per-gene summary statistics from an initial differential expression analysis, but iDEA has increased power and provides updated results for detection of both differentially expressed genes and gene sets.
+notes for brainstorming
+
+    Show how to make ranked list with log2FC and -sign(log2FC)xlog10(pval) for GSEA with fgsea and compare
+
+
+### iDEA
+
+iDEA (https://xzhoulab.github.io/iDEA/) is a more recent method which performs joint estimation of differential expression and gene set enrichment. It assumes you have already run differential expression analysis and expects an input of gene-level summary stats -- the fold changes and their variances. Here we can calculate that information from our Seurat output:
+
+```{r}
+ctl_vs_stim$zscore <- qnorm(ctl_vs_stim$p_val/2.0, lower.tail=FALSE) #### convert the pvalue to z-score
+ctl_vs_stim$beta <- ctl_vs_stim$avg_log2FC
+ctl_vs_stim$se_beta <- abs(ctl_vs_stim$beta/ctl_vs_stim$zscore)
+ctl_vs_stim$beta_var <- ctl_vs_stim$se_beta^2
+summary <- data.frame(beta = ctl_vs_stim$beta, beta_var = ctl_vs_stim$beta_var)
+rownames(summary) <- rownames(ctl_vs_stim)
+summary$gene_symbol <- rownames(summary) 
 ```
 
 For the input to our GSEA program we need a matrix of data where the rows are genes, the columns are pathways or modules of genes, and the dataframe is filled with 1 and 0 for presence/absence. Let's do some wrangling to get things in the right format.
@@ -550,37 +617,13 @@ idea@gsea
 ```
 The sign in `annot_coef` tells you whether this pathway has DE genes in it, regardless of the strength of the up or down regulation. 
 
-
+```{r}
 pip <- unlist(idea@de[["REACTOME_INTERFERON_SIGNALING"]]$pip)
-
 
 ### posterior inclusion probability of a gene being DE gene.
 pip = unlist(idea@de[["GO_REGULATION_OF_CANONICAL_WNT_SIGNALING_PATHWAY"]]$pip)
 ### head the posterior inclusion probability for each gene
 head(pip)
 idea@de$REACTOME_INTERFERON_SIGNALING$beta idea@de$REACTOME_INTERFERON_SIGNALING$pip
-
-
-
-We also run a more standard GSEA analysis, on just the Hallmark gene sets. There is an open question of how to create a ranked list for this analysis. We started with avg_logFC as was suggested in issue#50 on the fgsea repo, but it returned no significant pathways at all, which does not seem right for our comparisons also given Table \@ref(tab:de-markers). This may be because in the discussion avg_logFC was suggested when comparing markers just between cell type clusters, but we are also actually comparing between different treatment types. Another option was to use -sign(avg_log2FC)*log10(p_val_adj), which incorporates both logfoldchange and the pvalue. This approach seemed more reasonable and yielded results more similar to iDEA.
-iDEA
-
-GSEA and ORA are dependent on an initial differential expression analysis. However, the differential expression of an individual gene also has an obvious dependence on gene set enrichment, as gene sets contain information about the individual genes within the set. iDEA (integrative Differental expression and gene set Enrichment Analysis) addresses this joint dependence through a model that jointly estimates both differential expression and gene set enrichment. The input to this method is still a list of per-gene summary statistics from an initial differential expression analysis, but iDEA has increased power and provides updated results for detection of both differentially expressed genes and gene sets.
-notes for brainstorming
-
-    Show how to pull out hallmark gene sets (or any) with msigdbr
-    Show how to get markers with necessary options to get all genes
-    Show how to compute number of DE genes out of total
-    Show how to do an ORA with hypergeometric distribution
-    Show how to do an ORA with ClusterProfiler
-    Show how to make ranked list with log2FC and -sign(log2FC)xlog10(pval) for GSEA with fgsea and compare
-    Show how to make summary statistics list with iDEA
-    graphic for iDEA
-    Don't run iDEA but show code
-
-
-```{r "multimodal things go here"}
-
 ```
-
 
