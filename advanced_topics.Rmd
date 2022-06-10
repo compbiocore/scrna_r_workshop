@@ -533,19 +533,15 @@ As we can see, the interferon signaling pathway has a significant pvalue, but th
 
 ### Gene set enrichment analysis (GSEA)
 
-GSEA is a more in-depth method that can 
+GSEA is a more in-depth method that can capture coordinated changes in pathways even if the differences are small or some of the genes are not differentially expressed. We won't get into the algorithm here, but the three important results from the output to keep in mind are:
 
-    Enrichment score (ES) - a representation of how overrepresented a gene set is at the top or bottom of the ranked list.
-    p-value of ES - the significance of the score for that gene set
-    Adjusted p-value - an adjusted p-value to account for multiple hypothesis testing of multiple gene sets
-
-- Gene Set Enrichment (GSEA) takes a ranked list of genes (e.g. all genes in the differential expression analysis sorted by log fold change or test statistic or some other metric) and calculates an enrichment score based on whether a gene set is over-represented at the top or bottom of the list.
-
-ORA will miss smaller but coordinated changes in pathways -- so, when a pathway doesn't contain many differentially expressed genes, but all the genes in the pathway change together.
+ * Enrichment score (ES) - a representation of how overrepresented a gene set is at the top or bottom of the ranked list.
+ * p-value of ES - the significance of the score for that gene set
+ * Adjusted p-value - an adjusted p-value to account for multiple hypothesis testing of multiple gene sets
 
 
-
-We also run a more standard GSEA analysis, on just the Hallmark gene sets. There is an open question of how to create a ranked list for this analysis. We started with avg_logFC as was suggested in issue#50 on the fgsea repo, but it returned no significant pathways at all, which does not seem right for our comparisons also given Table \@ref(tab:de-markers). This may be because in the discussion avg_logFC was suggested when comparing markers just between cell type clusters, but we are also actually comparing between different treatment types. Another option was to use -sign(avg_log2FC)*log10(p_val_adj), which incorporates both logfoldchange and the pvalue. This approach seemed more reasonable and yielded results more similar to iDEA.
+In order to do GSEA, we
+here is an open question of how to create a ranked list for this analysis. We started with avg_logFC as was suggested in issue#50 on the fgsea repo, but it returned no significant pathways at all, which does not seem right for our comparisons also given Table \@ref(tab:de-markers). This may be because in the discussion avg_logFC was suggested when comparing markers just between cell type clusters, but we are also actually comparing between different treatment types. Another option was to use -sign(avg_log2FC)*log10(p_val_adj), which incorporates both logfoldchange and the pvalue. This approach seemed more reasonable and yielded results more similar to iDEA.
 iDEA
 
 GSEA and ORA are dependent on an initial differential expression analysis. However, the differential expression of an individual gene also has an obvious dependence on gene set enrichment, as gene sets contain information about the individual genes within the set. iDEA (integrative Differental expression and gene set Enrichment Analysis) addresses this joint dependence through a model that jointly estimates both differential expression and gene set enrichment. The input to this method is still a list of per-gene summary statistics from an initial differential expression analysis, but iDEA has increased power and provides updated results for detection of both differentially expressed genes and gene sets.
