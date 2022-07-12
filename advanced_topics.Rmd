@@ -30,7 +30,7 @@ library(future)
 plan()
 ```
 
-We set workers=8 because we've requested 8 cores. Additionally, we set `multisession` instead of `multiprocess` despite what the vignette says, because `multiprocess` is actually deprecated in `future` and we should be explicitly specifying `multisession` or `multicore` instead. Getting into the difference is out of scope of this workshop, but you can [read more](https://cran.r-project.org/web/packages/future/vignettes/future-1-overview.html) on future yourself if interested.
+We set workers=4 because we've requested 4 cores. Additionally, we set `multisession` instead of `multiprocess` despite what the vignette says, because `multiprocess` is actually deprecated in `future` and we should be explicitly specifying `multisession` or `multicore` instead. Getting into the difference is out of scope of this workshop, but you can [read more](https://cran.r-project.org/web/packages/future/vignettes/future-1-overview.html) on future yourself if interested.
 
 ```{r}
 # change the current plan to access parallelization
@@ -46,6 +46,7 @@ Multimodal scRNA-seq is a quickly evolving field that allows simultaneous measur
 This workshop will touch on working with CITE-seq data, which simultaneously profiles cell surface protein and gene expression levels (https://www.nature.com/articles/nmeth.4380 and https://cite-seq.com/). 
 
 ![sc flow](src/citeseq_flow.png)
+
 Similar to the standard set-up for 10x gene expression preps, CITE-seq starts with a cell and a barcoded bead encapsulated in a droplet. However, before the encapsulation step, oligo-barcoded antibodies are added to the cells and will bind to the cell surface proteins. 
    
 ![sc flow](src/citeseq_str.png)
@@ -517,6 +518,7 @@ How these gene sets should be formatted varies for each type of package, so we w
 Overrepresentation analysis (ORA) actually has quite a simple formula to compute the p-value for a given gene set. If N is the total number of genes in the background distribution (the list of all genes across all the gene sets), M the number of genes within the gene set that are in the background, n the size of the list of DE gnes, and k the number of DE genes that are in the gene set, then the p-value can be computed with the hypergeometric distribution
 
 $$ p = 1 - \sum_{i=0}^{k-1} \frac{\binom{M}{i} \binom{N-M}{n-i}}{\binom{N}{n}} $$
+
 p-values should then be adjusted for multiple comparison.
 
 We will use the package `clusterProfiler` to do this computation as well as adjust. Since in ORA we only want the list of DE genes, we filter out `ctl_vs_stim` to only keep genes with pvalue < 0.05. With this list and the `filtered_genes` dataframe from `misgdbr` we have enough inputs for the `clusterProfiler::enricher` function to do our analysis.
@@ -533,26 +535,60 @@ As we can see, the interferon signaling pathway has a significant pvalue, but th
 
 ### Gene set enrichment analysis (GSEA)
 
-GSEA is a more in-depth method that can capture coordinated changes in pathways even if the differences are small or some of the genes are not differentially expressed. We won't get into the algorithm here, but the three important results from the output to keep in mind are:
+GSEA is a more in-depth method that can capture coordinated changes in pathways even if the differences are small or some of the genes are not differentially expressed. We won't get into the details for the method here, but the three important results from the output to keep in mind are:
 
  * Enrichment score (ES) - a representation of how overrepresented a gene set is at the top or bottom of the ranked list.
  * p-value of ES - the significance of the score for that gene set
  * Adjusted p-value - an adjusted p-value to account for multiple hypothesis testing of multiple gene sets
 
+In order to do GSEA, we have to created a ranked list of genes. How to do so is an open question. Additionally the algorithm for GSEA is meant for bulk RNAseq and comparing between groups, and is not directly applicable to single cell RNAseq which also includes variability in clusters of cell types. For those reasons we would not necessarily recommend running GSEA, but here are some suggestions for if it is something you want to do.
 
-In order to do GSEA, we
-here is an open question of how to create a ranked list for this analysis. We started with avg_logFC as was suggested in issue#50 on the fgsea repo, but it returned no significant pathways at all, which does not seem right for our comparisons also given Table \@ref(tab:de-markers). This may be because in the discussion avg_logFC was suggested when comparing markers just between cell type clusters, but we are also actually comparing between different treatment types. Another option was to use -sign(avg_log2FC)*log10(p_val_adj), which incorporates both logfoldchange and the pvalue. This approach seemed more reasonable and yielded results more similar to iDEA.
-iDEA
+We will use the package `fgsea` to do a GSEA analysis. Suggested on issue#50 in the fgsea repo is using either one of two metrics to rank the genes: avg_logFC, or -sign(avg_log2FC)*log10(p_val_adj). In experiments we've done, `avg_logFC` tends to return no significant pathways, while `-sign(avg_log2FC)log10(p_val_adj)` returns more significant pathways but results that are somewhat unexpected. `fgsea` takes as input a vector of the scores where the names are the gene symbols, and a corresponding list of gene sets where each entry has the list of gene symbols comprising that gene set.
 
-GSEA and ORA are dependent on an initial differential expression analysis. However, the differential expression of an individual gene also has an obvious dependence on gene set enrichment, as gene sets contain information about the individual genes within the set. iDEA (integrative Differental expression and gene set Enrichment Analysis) addresses this joint dependence through a model that jointly estimates both differential expression and gene set enrichment. The input to this method is still a list of per-gene summary statistics from an initial differential expression analysis, but iDEA has increased power and provides updated results for detection of both differentially expressed genes and gene sets.
-notes for brainstorming
+```{r}
+library(fgsea)
 
-    Show how to make ranked list with log2FC and -sign(log2FC)xlog10(pval) for GSEA with fgsea and compare
+ranks <- ctl_vs_stim$avg_log2FC # replace with -sign(avg_log2FC)*log10(p_val_adj) if ranking other way
+ranks[ranks==Inf] <- 500000 # FTL is Inf which cannot be input to fgsea
+names(ranks) <- rownames(ctl_vs_stim)
+ranks[1:10]
 
+gene_sets <- split(filtered_genes$gene_symbol, f = filtered_genes$gs_name)
+gene_sets
+
+res <- fgsea(pathways=gene_sets, stats=ranks,minSize=10,maxSize=500)
+res$ID <- 1:nrow(res)
+res
+```
+
+As we can see, none of the pathways are considered significant. We can rerun this code using `-sign(avg_log2FC)log10(p_val_adj)` instead:
+
+```{r}
+ranks <- -sign(ctl_vs_stim$avg_log2FC)*log10(ctl_vs_stim$p_val_adj)
+ranks[ranks==Inf] <- 500000 # FTL is Inf which cannot be input to fgsea
+names(ranks) <- rownames(ctl_vs_stim)
+ranks[1:10]
+
+res <- fgsea(pathways=gene_sets, stats=ranks,minSize=10,maxSize=500)
+res$ID <- 1:nrow(res)
+res
+```
+
+None of the pathways are deemed significant here still, but the interferon signaling pathway has at least a pvalue closer to 0.05.
+
+We can also do bubble plots with these results:
+```{r}
+library(ggrepel)
+ggplot(res, aes(x=ID,y=-log10(padj), color=NES, label=pathway)) +
+    geom_point(shape=19,aes(fill=NES,size=size), alpha=0.8) +
+    scale_color_gradient2() + scale_fill_gradient2() + geom_label_repel(nudge_y=0.05)
+```
 
 ### iDEA
 
-iDEA (https://xzhoulab.github.io/iDEA/) is a more recent method which performs joint estimation of differential expression and gene set enrichment. It assumes you have already run differential expression analysis and expects an input of gene-level summary stats -- the fold changes and their variances. Here we can calculate that information from our Seurat output:
+GSEA and ORA are dependent on an initial differential expression analysis. However, the differential expression of an individual gene also has an obvious dependence on gene set enrichment, as gene sets contain information about the individual genes within the set. iDEA (integrative Differental expression and gene set Enrichment Analysis) addresses this joint dependence through a model that jointly estimates both differential expression and gene set enrichment. (https://xzhoulab.github.io/iDEA/) The input to this method is still a list of per-gene summary statistics from an initial differential expression analysis, but iDEA has increased power and provides updated results for detection of both differentially expressed genes and gene sets.
+
+iDEA expects an input of gene-level summary stats -- the fold changes and their variances. Here we can calculate that information from our Seurat output:
 
 ```{r}
 ctl_vs_stim$zscore <- qnorm(ctl_vs_stim$p_val/2.0, lower.tail=FALSE) #### convert the pvalue to z-score
@@ -592,7 +628,7 @@ annots_sub$gene_symbol <- NULL
 
 
 ```{r}
-idea <- CreateiDEAObject(as.data.frame(sum_stats_sub), as.data.frame(annots_sub))
+idea <- CreateiDEAObject(as.data.frame(sum_stats_sub), as.data.frame(annots_sub), num_core=4)
 ```
 
 
@@ -620,6 +656,7 @@ pip <- unlist(idea@de[["REACTOME_INTERFERON_SIGNALING"]]$pip)
 pip = unlist(idea@de[["GO_REGULATION_OF_CANONICAL_WNT_SIGNALING_PATHWAY"]]$pip)
 ### head the posterior inclusion probability for each gene
 head(pip)
+
 idea@de$REACTOME_INTERFERON_SIGNALING$beta idea@de$REACTOME_INTERFERON_SIGNALING$pip
 ```
 
