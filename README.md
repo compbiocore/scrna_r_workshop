@@ -25,8 +25,8 @@ This repository contains R markdown files for the analysis of scRNAseq data (mai
 
 ### Prior workshop dates and associated notebooks
 
-| Date                         | Workshop                                                 | Title                                   | Notebook            | Commit  |
-|------------------------------|----------------------------------------------------------|-----------------------------------------|---------------------|---------|
-| June 10th 2022, 1-2:30 PM    | CCV Bootcamp (https://docs.ccv.brown.edu/bootcamp-2022/) | Introduction to scRNA-seq               | intro.Rmd           | e89ca39 |
-| June 10th 2022, 2:30-4:00 PM | CCV Bootcamp (https://docs.ccv.brown.edu/bootcamp-2022/) | Advanced topics in single-cell analysis | advanced_topics.Rmd | e89ca39 |                                            
+| Date                         | Workshop                                                 | Title                                   | Notebook            | Commit  | Versions                  |
+|------------------------------|----------------------------------------------------------|-----------------------------------------|---------------------|---------|---------------------------|
+| June 10th 2022, 1-2:30 PM    | CCV Bootcamp (https://docs.ccv.brown.edu/bootcamp-2022/) | Introduction to scRNA-seq               | intro.Rmd           | e89ca39 | Seurat 4.1.1, R 4.0.3     |
+| June 10th 2022, 2:30-4:00 PM | CCV Bootcamp (https://docs.ccv.brown.edu/bootcamp-2022/) | Advanced topics in single-cell analysis | advanced_topics.Rmd | e89ca39 | Seurat 4.1.1, R 4.0.3     |                                           
 
