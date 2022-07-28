@@ -23,5 +23,10 @@ This repository contains R markdown files for the analysis of scRNAseq data (mai
 - Understanding how to classify cell types using Seurat TransferAnchors and the distinction between data transfer and data integration.
 - Understanding the distinction between over representation analysis and gene set enrichment and their appropriateness for scRNAseq analysis.
 
-  
+### Prior workshop dates and associated notebooks
+
+| Date | Workshop | Title | Notebook | Commit  
+|---|---|---|---
+| June 10 2022 1-2:30 PM | CCV Bootcamp (https://docs.ccv.brown.edu/bootcamp-2022/) | Introduction to scRNA-seq | intro.Rmd | e89ca39 
+| June 10 2022 2:30-4:00 PM | CCV Bootcamp (https://docs.ccv.brown.edu/bootcamp-2022/) | Advanced topics in single-cell analysis | advanced_topics.Rmd | e89ca39                                            
 
