@@ -1,0 +1,72 @@
+# iDEA
+
+iDEA (https://xzhoulab.github.io/iDEA/) is a more recent method which performs joint estimation of differential expression and gene set enrichment. It assumes you have already run differential expression analysis and expects an input of gene-level summary stats -- the fold changes and their variances. Here we can calculate that information from our Seurat output:
+
+```{r}
+ctl_vs_stim$zscore <- qnorm(ctl_vs_stim$p_val/2.0, lower.tail=FALSE) #### convert the pvalue to z-score
+ctl_vs_stim$beta <- ctl_vs_stim$avg_log2FC
+ctl_vs_stim$se_beta <- abs(ctl_vs_stim$beta/ctl_vs_stim$zscore)
+ctl_vs_stim$beta_var <- ctl_vs_stim$se_beta^2
+summary <- data.frame(beta = ctl_vs_stim$beta, beta_var = ctl_vs_stim$beta_var)
+rownames(summary) <- rownames(ctl_vs_stim)
+summary$gene_symbol <- rownames(summary) 
+```
+
+For the input to our GSEA program we need a matrix of data where the rows are genes, the columns are pathways or modules of genes, and the dataframe is filled with 1 and 0 for presence/absence. Let's do some wrangling to get things in the right format.
+
+```{r}
+
+#set all to 1
+filtered_genes$value <- 1
+```
+
+```{r}
+#pivot wider and fill in empy rows with 0
+annots <- as.data.frame(tidyr::pivot_wider(filtered_genes, id_cols=gene_symbol,names_from=gs_name, values_from=value, values_fill=0)) 
+```
+
+Filter so that the rownames of annots and summary stats match exactly because this is what iDEA expects. 
+```{r}
+joint.genes <- intersect(summary[,3], annots[,1])
+sum_stats_sub <- summary %>% filter(gene_symbol %in% joint.genes)
+annots_sub <- annots %>% filter(gene_symbol %in% joint.genes)
+
+rownames(sum_stats_sub) <- sum_stats_sub$gene_symbol 
+sum_stats_sub$gene_symbol <- NULL
+
+rownames(annots_sub) <- annots_sub$gene_symbol
+annots_sub$gene_symbol <- NULL
+```
+
+
+```{r}
+idea <- CreateiDEAObject(as.data.frame(sum_stats_sub), as.data.frame(annots_sub))
+```
+
+
+#bump mcmc_iter to 100 to help things go faster
+```{r}
+idea <- iDEA.fit(idea,
+	         mcmc_iter=100, 
+	         verbose=TRUE)
+```
+Add corrected pvalues
+```{r}
+idea <- iDEA.louis(idea)
+```
+
+Look at the results for the gene sets
+```{r}
+idea@gsea
+```
+The sign in `annot_coef` tells you whether this pathway has DE genes in it, regardless of the strength of the up or down regulation. 
+
+```{r}
+pip <- unlist(idea@de[["REACTOME_INTERFERON_SIGNALING"]]$pip)
+
+### posterior inclusion probability of a gene being DE gene.
+pip = unlist(idea@de[["GO_REGULATION_OF_CANONICAL_WNT_SIGNALING_PATHWAY"]]$pip)
+### head the posterior inclusion probability for each gene
+head(pip)
+idea@de$REACTOME_INTERFERON_SIGNALING$beta idea@de$REACTOME_INTERFERON_SIGNALING$pip
+```

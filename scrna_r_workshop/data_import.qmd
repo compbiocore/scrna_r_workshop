@@ -1,0 +1,15 @@
+# Importing data
+
+ - We are using the `SeuratData` package for some test data. 
+ - Use `AvailableData()` to see what datasets are available
+```{r}
+AvailableData()
+```
+
+- We've already installed a few of the test datasets in this container, you would usually be able to install more datasets using `InstallData` but won't have permissions to install in this container. 
+- What if you want to run Seurat using your own data? We can use the function `Read10X_h5` to import some h5 files.    
+
+"Hierarchical Data Format (HDF5 or H5). H5 is a binary format that can compress and access data much more efficiently than text formats such as MEX, which is especially useful when dealing with large datasets." https://support.10xgenomics.com/single-cell-gene-expression/software/pipelines/latest/advanced/h5_matrices.   
+
+- You could also use you could also use `Read10X` and give a path to a folder that contains your matrix, features, and barcode tsv files.
+- After you have read in the 10X data, use it as the input to the `CreateSeuratObject` function.

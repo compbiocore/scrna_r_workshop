@@ -1,0 +1,26 @@
+# SCTransform
+- We'll use `SCTransform` to normalize -- use as an alternative to the `NormalizeData`, `FindVariableFeatures`, `ScaleData` workflow, which is the default of what Seurat usually suggests.   
+- First, split the merged object by `orig.ident`.   
+
+```{r}
+all_data_split <- SplitObject(all_data_sub, split.by = 'orig.ident')
+```
+
+**Theory**
+
+The theory behind SCTransform (https://genomebiology.biomedcentral.com/articles/10.1186/s13059-019-1874-1) is very similar to the generalized linear models (GLMs) used in bulkRNAseq analysis packages like DESeq2 and edgeR. In DESeq2 a negative binomial model is fitted to the counts and the mean and dispersion (roughly speaking how variable the observed count will be from the mean count) estimates from that model are used as the test statistics for comparison between groups. The same idea applies with SCTransform, with an additional aspect where SCTransform pools information across genes with similar abundances in order to address the higher sparsity of single cell data. 
+
+Below is a side-by-side comparison of sctransform with NormalizeData, FindVariableFeatures and ScaleData on the PBMC3k data:
+![sct](src/sctransform_vs_regular.png)
+We also like this figure from the SCTransform paper, which shows how SCTransform ('Pearson Residuals') and the standard log-transformation approach ('Log-normalization') helps alleviate variance in your data from sequencing depth alone :
+
+![sct_fig6](src/sct_fig6.png)
+- We can run SCTransform on the data list you just made.
+- You might get see a warning that says 'iteration limit reached' when you run this.
+- This warning can be ignored (https://github.com/satijalab/sctransform/issues/25) because the parameter estimation generating this warning is regularized later anyway. 
+
+```{r "SCTransform"}
+all_data_list <- lapply(all_data_split, function(x) {
+    x <- SCTransform(x,verbose=FALSE,return.only.var.genes = FALSE)}) # if you run this you might get several iteration limit reached issues
+```
+- When you run SCTransform you need to specify an additional parameter otherwise only the variable genes will be included in the scale data slot. Add return.only.var.genes = FALSE to the function call and that should solve the issue (https://github.com/satijalab/seurat/issues/3553).

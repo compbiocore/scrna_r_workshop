@@ -1,0 +1,74 @@
+project:
+  type: book
+
+book:
+  title: "Single cell RNAseq in R"
+  author: "Brown University Computational Biology Core"
+  date: "8/5/2022"
+  chapters:
+    - part: "Introduction"
+      chapters: 
+        - index.qmd
+        - learningobjectives.qmd
+        - gettingstarted.qmd
+        - parallelization.qmd
+    - part: "Background"
+      chapters:
+        - bulk_vs_single.qmd
+        - library_prep.qmd
+        - seurat_objects.qmd
+    - part: "Setup and import"
+      chapters:
+        - setup.qmd
+        - data_import.qmd
+        - working_with_seurat.qmd
+    - part: "QC and filtering"
+      chapters:
+        - merging.qmd
+        - qc_and_filtering.qmd
+    - part: "SCTransform, clustering, dimension reduction, and integration"    
+      chapters:
+        - sctransform.qmd
+        - clustering.qmd
+        - dimension_reduction.qmd
+        - integration.qmd
+    - part: "Differential expression and data visualization"
+      chapters:
+        - differential_expression.qmd
+        - data_viz.qmd
+    - part: "Introduction to Multimodal Data"
+      chapters:
+        - multimodal_intro.qmd
+        - cellhashing_citeseq.qmd
+        - multiome10x.qmd
+    - part: "Working with Multimodal Data"
+      chapters:        
+        - multimodal_start.qmd
+        - norm_and_markers_citeseq.qmd
+    - part: "Controlling for Type I error in estimated clusters"
+      chapters:        
+        - cluster_pvalue.rmd     
+    - part: "Working with Transfer Anchors to transfer information across datasets"
+      chapters:        
+        - transfer_anchors.qmd
+        - cluster_pvalue.rmd     
+    - part: "Approaches to pathway analyses with single cell data"
+      chapters:        
+        - pathway.qmd
+        - msigdbr.qmd
+        - ora.qmd
+        - gsea.qmd
+        - idea.qmd
+        
+  number-depth: 1
+
+bibliography: references.bib
+
+format:
+  html:
+    theme: cosmo
+  pdf:
+    documentclass: scrreprt
+
+
+

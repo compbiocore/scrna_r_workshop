@@ -1,0 +1,50 @@
+# Pathway / gene set analysis
+
+Pathway analysis, sometimes known as gene set analysis, attempts to identify genes that are over-represented in a set of genes that make up pathways associated with various mechanisms. You can think of it like this: if a particular pathway consists of 300 genes, and 280 of those 300 genes are in our list of differentially expressed genes, then is that pathway relevant to the differences between our groups of interest?
+
+Two commonly used methods to look for enrichment are overrepresentation analysis (ORA) or gene set enrichment analysis (GSEA).
+
+- Over Representation Analysis (ORA) looks for functions or processes that are over-represented (= enriched) in an experimentally-derived gene list (e.g. all differentially expressed genes) relative to a background gene list (e.g. all genes in the dataset). 
+- Gene Set Enrichment (GSEA) takes a ranked list of genes (e.g. all genes in the differential expression analysis sorted by log fold change or test statistic or some other metric) and calculates an enrichment score based on whether a gene set is over-represented at the top or bottom of the list.
+
+ORA will miss smaller but coordinated changes in pathways -- so, when a pathway doesn't contain many differentially expressed genes, but all the genes in the pathway change together. GSEA is designed to catch these - however how to rank genes is an open question with variable results.
+
+A third method specifically designed for single-cell is integrated differential expression and gene set enrichment analysis (iDEA) [@Ma2020], which we will go into further below. Here we'll talk about these three methods as applied to single cell data.
+
+# Preparing data
+
+All pathways analysis methods start with a list of gene markers. GSEA and iDEA also require summary statistics associated with the gene markers. As such we will compute markers first, on the `ifnb` data. Let's run through the standard data processing pipeline and run `FindMarkers` to compare `STIM` to `CTRL`.
+
+```{r}
+ifnb
+ifnb_sub <- subset(ifnb, subset = nFeature_RNA > 1000 & nFeature_RNA < 7000 )
+ifnb.list <- SplitObject(ifnb_sub, split.by = 'stim')
+ifnb.list <- lapply(ifnb.list, function(x) {
+    x <- SCTransform(x,verbose=FALSE,return.only.var.genes = FALSE)})
+ifnb.merge <- merge(x = ifnb.list$CTRL, y = ifnb.list$STIM, merge.data = TRUE) 
+integration_features <- SelectIntegrationFeatures(ifnb.list)
+VariableFeatures(ifnb.merge) <- integration_features
+ifnb.merge <- RunPCA(ifnb.merge)
+ElbowPlot(ifnb.merge)
+```
+
+```{r}
+ifnb.list <- PrepSCTIntegration(object.list = ifnb.list, anchor.features = integration_features)
+ifnb.anchors <- FindIntegrationAnchors(object.list = ifnb.list, normalization.method = "SCT", anchor.features = integration_features)
+ifnb_integrated <- IntegrateData(anchorset = ifnb.anchors, normalization.method = "SCT")
+ifnb_integrated <- RunPCA(ifnb_integrated)
+ifnb_integrated<- FindNeighbors(ifnb_integrated, dims = 1:10)
+ifnb_integrated <- FindClusters(ifnb_integrated)
+ifnb_integrated <- RunUMAP(ifnb_integrated, dims = 1:10)
+ifnb_integrated <- RunTSNE(ifnb_integrated, tsne.method = "FIt-SNE", seed.use=61)
+```
+
+When you run differential expression for this type of analysis, make sure you modify the default settings for `FindMarkers`, otherwise it will do some filtering of your data and so will report back a smaller subset of genes. Additionally, make sure the assay you run `FindMarkers` on is the `RNA` assay rather than `SCT` or `Integrated`. Here we also use the option `test.use="MAST"` to use MAST [@Finak2015], a method developed specifically for differential expression analysis in single-cell data.
+
+```{r}
+DefaultAssay(ifnb_integrated) <- 'RNA'
+Idents(ifnb_integrated) <- 'stim'
+#run DE testing with modified settings -- by default FindMarkers will filter out genes that are lowly expressed, etc. and we don't want that -- we want all the stats.
+ctl_vs_stim <- FindMarkers(ifnb_integrated, ident.1 = 'CTRL', ident.2 = 'STIM', test.use="MAST", min.cells.group = 1, min.cells.feature = 1, min.pct = 0, logfc.threshold = 0, only.pos = FALSE)
+```
+

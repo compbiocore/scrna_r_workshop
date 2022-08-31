@@ -1,0 +1,4 @@
+# Getting started
+
+** Running the notebook in Open on Demand at Brown **
+** Running the notebook on a local machine **

@@ -1,0 +1,28 @@
+# Seurat objects
+- This workshop focuses on using [Seurat objects](https://github.com/satijalab/seurat/wiki/Seurat) to structure your scRNA-seq data.     
+
+![](src/seurat_object.png){height=500px width=600px} 
+
+- Each Seurat object is composed of different slots.
+    - **`assays`** is a list of all the assays in the object.
+        - Typically only has the `RNA` assay, but you can add others (like `SCT` shown in the figure above, could also be antibody-derived tags, etc.). 
+        - You can see which assay is the currently active assay by looking in the `active.assay` slot and switch between them using the `DefaultAssay()` function.
+        - Each assay will store multiple transformations of the data in different slots -- in the case of `RNA` data these slots are: 
+            - `@counts` contains the raw counts.
+            - `@data` contains the normalized counts.
+            - `@scale.data` contains the scaled data for dimensional reduction.
+        - The slots store the data as a sparse matrix where the rows are gene and the columns are cells.      
+    - **`meta.data`** is a matrix of all the cell-level metadata.
+        - This will include information about which condition, timepoint, batch, etc. a for a given cell.
+        - It also includes metrics that will be relevant for QC, like `nCount_RNA` and `nFeature_RNA`
+            - `nCount_RNA` is the total number of molecules (UMIs) detected within a cell.
+            - `nFeature_RNA` is the total number of genes detected within a cell.
+        - Once you have completed clustering, you'll also see information about which cluster each cell has been assigned to.
+        - The different categories or columns in the `meta.data` are also called `Idents` in Seurat.
+        - You can see the current `Ident` in the `active.ident` slot and switch between them using the `Idents()` function (this will probably be important for running differential expression testing).
+    - **`graphs`** is a list of the nearest neighbor graphs.
+        - The objects stored in `graphs` are cell x cell matrices containing the neighborhood overlap (Jaccard index) between every cell and its nearest neighbors. 
+    - **`reductions`** is a list of `DimReduc` objects.
+    - **`version`** contains information about which version of Seurat was used to make the object.
+    - There are other optional slots, including **`tools`** and **`misc`** that can be populated by specific analysis tools (`tools`) or users can store their own additional information (`misc`).
+    

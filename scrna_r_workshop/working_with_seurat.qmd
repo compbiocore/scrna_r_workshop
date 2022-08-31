@@ -1,0 +1,25 @@
+# Working with Seurat objects
+
+- We can look at the Seurat objects we've loaded from SeuratData:
+
+```{r}
+ifnb
+pbmc3k
+```
+- The `pbmc3k` dataset is 2,700 peripheral blood mononuclear cells (PBMC) from 10X genomics.
+```{r}
+?pbmc3k
+```
+- The `ifnb` dataset is 14,000 IFNB-Stimulated and Control PBMCs.
+```{r}
+?ifnb
+```
+
+What assays and meta.data are available?
+```{r}
+pbmc3k@assays
+pbmc3k@meta.data
+
+ifnb@assays
+ifnb@meta.data
+```

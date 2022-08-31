@@ -1,0 +1,19 @@
+# Overrepresentation analysis
+
+Overrepresentation analysis (ORA) actually has quite a simple formula to compute the p-value for a given gene set. If N is the total number of genes in the background distribution (the list of all genes across all the gene sets), M the number of genes within the gene set that are in the background, n the size of the list of DE gnes, and k the number of DE genes that are in the gene set, then the p-value can be computed with the hypergeometric distribution
+
+$$ p = 1 - \sum_{i=0}^{k-1} \frac{\binom{M}{i} \binom{N-M}{n-i}}{\binom{N}{n}} $$
+p-values should then be adjusted for multiple comparison.
+
+We will use the package `clusterProfiler` to do this computation as well as adjust. Since in ORA we only want the list of DE genes, we filter out `ctl_vs_stim` to only keep genes with pvalue < 0.05. With this list and the `filtered_genes` dataframe from `misgdbr` we have enough inputs for the `clusterProfiler::enricher` function to do our analysis.
+
+```{r}
+library(clusterProfiler)
+de_genes <- filter(ctl_vs_stim, p_val_adj < 0.05) %>% rownames()
+ora <- enricher(gene=de_genes, pvalueCutoff = 0.05, pAdjustMethod="BH",
+         TERM2GENE=filtered_genes)
+ora@result
+```
+
+As we can see, the interferon signaling pathway has a significant pvalue, but the other 3 pathways do not. The results also include a GeneRatio and a BgRatio, corresponding to M/N and k/n respectively. This is in line with our expectations. Although ORA is rather simple, it's a good first step to check your expectations quickly before moving on to more complicated analyses.
+

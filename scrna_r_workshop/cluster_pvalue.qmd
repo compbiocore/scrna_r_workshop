@@ -1,0 +1,54 @@
+# Controlling for Type I error in estimated clusters with clusterpval
+
+The first part of this workshop ran through how to use Seurat to cluster the cells. The first step is running a PCA (`RunPCA`), which then gets used as the input for the `FindNeighbors` function. `FindNeighbors` constructs a KNN graph based on the euclidean distance in PCA space and refines the edge weights between any two cells based on the shared overlap in their local neighborhoods (Jaccard similarity). The next step is `FindClusters`, where we apply the Louvain algorithm to iteratively group cells together, with the goal of optimizing the standard modularity function. 
+
+After we have grouped the cells, we might want to ask questions about the clusters -- for example, are there differentially expressed genes across clusters? **This gets us into 'double-dipping' territory.** We have clustered the cells based on their gene expression and then want to ask questions about which genes are differentially expressed across those groups. We are generating hypotheses based on the data and then testing the hypotheses on the same data. This can lead to an uncontrolled type I error rate when using classical hypothesis tests like the Wilcoxon test. 
+
+We can use a program called `clusterpval` to check whether the difference in means of the clusters is significant. [@Gao2021] This is meant to partially address the problem of "double dipping," where the same data used to cluster and thus form groups is then used again for post-clustering analysis with the clusters designated as the groups. The method adjusts the pvalue for difference in means of the clusters. However it does not adjust pvalues for differential expression analysis, or difference in means of a subset of the data (i.e. genes), which would be what we actually want to do. Nevertheless it can be used as a check on the validity of the clusters.
+
+We largely follow the code from [issue#2](https://github.com/lucylgao/clusterpval/issues/2) on the `clusterpval` repo. They are working on an [implementation for expression analysis](https://github.com/lucylgao/clusterpval/issues/3), so what this will tell you now is mostly whether your clusters are significant or not. My implementation of the clustering function doesn't start from the counts matrix, it starts from the integrated data and just runs `FindClusters` with a different random seed each time, so that may impact results as well. This is to speed up computation.
+
+We can try working though running clusterpval. First, we will filter the pbmc3k data to keep it very small and then quickly run through normalization, clustering, and dimension reduction.
+
+
+```{r}
+pbmc3k
+pbmc3k_sub <- subset(pbmc3k, subset = nFeature_RNA > 1000 & nFeature_RNA < 7000 )
+pbmc3k_sub <- SCTransform(pbmc3k_sub,verbose=FALSE,return.only.var.genes = FALSE)
+pbmc3k_sub <- RunPCA(pbmc3k_sub)
+pbmc3k_sub <- FindNeighbors(pbmc3k_sub, dims = 1:8)
+pbmc3k_sub <- FindClusters(pbmc3k_sub)
+pbmc3k_sub <- RunUMAP(pbmc3k_sub, dims = 1:8)
+pbmc3k_sub <- RunTSNE(pbmc3k_sub, tsne.method = "FIt-SNE", seed.use=61)
+DimPlot(pbmc3k_sub, label = TRUE)
+
+```
+
+Let's try running clusterpval. First, assign the clusters to `cluster` and change the default assay (use `integrated` if you have integrated data). We also make a function called `function_cluster` that will use a random seed to generate a new set of clustering for our Seurat object each time its run. We use this function as an argument to the `test_clusters_approx` function from clusterpval, which approximates p-values for the clusters via importance sampling. We'll run it with 1000 draws for the sake of time. Arguments to `test_clusters_approx` are the counts matrix, `k1` and `k2` the cluster IDs we want to test for (here we are testing cluster 3 vs cluster 1), the original clustering results, and a function to rerun clustering on our data.
+
+`clusterpval` is parallelized using `future_lapply` in the same way that several of the Seurat functions are parallelized using `future`, so the `multisession` plans we set above will apply here as well.
+
+```{r}
+clusters <-pbmc3k_sub@meta.data[["seurat_clusters"]]
+DefaultAssay(pbmc3k_sub) <- "SCT"
+set.seed(581762)
+function_cluster <- function(x) {
+    seed = sample.int(999999, size=1)
+    tmp <- FindClusters(pbmc3k_sub, random.seed=seed)
+    return(tmp@meta.data[["seurat_clusters"]])
+}
+tc <- test_clusters_approx(as.matrix(pbmc3k_sub@assays[["RNA"]]@counts),
+                     k1=3, k2=1, cl=clusters, cl_fun=function_cluster, ndraws=1000)
+```
+
+```{r}
+tc
+```
+The resulting output contains:
+stat: the test statistic - the Euclidean distance between the mean of cluster k1 and the mean of cluster k2
+pval: the approximate p-value
+stderr: standard error of the p-value estimate
+clusters: the estimated cluster assignments
+
+We are getting back NaN for the pvalues, likely because we are using only 1000 draws because we have limited time/oscar resources for the workshop.
+The authors are working on an implementation for expression analysis what would allow this method to perform differential expression p-value correction, but it is not functional as yet (https://github.com/lucylgao/clusterpval/issues/3).

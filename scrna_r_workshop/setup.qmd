@@ -1,0 +1,39 @@
+# Set up
+
+Let's get started. First, we'll need to set the `.libPaths()` since we are using a Singularity container.
+
+```{r}
+.libPaths(c('/usr/local/lib/R/site-library', '/usr/local/lib/R/library'))
+```
+
+- We'll also set a seed at the start of the notebook so that we can reproduce our results if we decide to re-run this notebook at some future date.   
+- We also set `future.globals.maxSize`, see this link for discussion about why we do that (basically we might be exceeding the allowed global variable size so we make them bigger) https://satijalab.org/seurat/archive/v3.0/future_vignette.html
+
+```{r}
+set.seed(61)
+options(future.globals.maxSize = 4000 * 1024^5)
+plan("multiprocess", workers = 4)
+```
+
+- Then we load all the libraries we need:
+```{r}
+
+library(RColorBrewer)
+library(Seurat)
+library(patchwork)
+library(ggplot2)
+library(dplyr)
+library(hdf5r)
+library(stringr)
+library(biomaRt)
+library(viridis)
+library(SeuratDisk)
+library(SeuratData)
+library(msigdbr)
+library('pbmc3k.SeuratData')
+library('cbmc.SeuratData')
+library('ifnb.SeuratData')
+data("pbmc3k")
+data("cbmc")
+data("ifnb")
+```

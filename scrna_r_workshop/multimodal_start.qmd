@@ -1,0 +1,110 @@
+# Importing Multimodal Data
+
+Let's try working with some multimodal data in Seurat.
+
+As in the previous workshop, we'll need to set the `.libPaths()`, set a seed and `future.globals.maxSize`, and import the libraries.
+
+```{r}
+.libPaths(c('/usr/local/lib/R/site-library', '/usr/local/lib/R/library'))
+set.seed(61)
+options(future.globals.maxSize = 4000 * 1024^5)
+library(RColorBrewer)
+library(Seurat)
+library(patchwork)
+library(ggplot2)
+library(dplyr)
+library(hdf5r)
+library(stringr)
+library(biomaRt)
+library(kableExtra)
+library(knitr)
+library(pdftools)
+library(viridis)
+library(openxlsx)
+library(SeuratDisk)
+library(SeuratData)
+library(ComplexHeatmap)
+library(plotly)
+library(iDEA)
+library(fgsea)
+library(clusterpval)
+library(msigdbr)
+
+library('pbmc3k.SeuratData')
+library('cbmc.SeuratData')
+library('ifnb.SeuratData')
+library('panc8.SeuratData')
+data("pbmc3k")
+data("cbmc")
+data("ifnb")
+data("panc8")
+
+```
+
+We'll work with the `cbmc` data for this section of the workshop, which is 8,617 cord blood mononuclear cells (CBMCs), produced with CITE-seq 
+```{r}
+cbmc
+```
+
+- This data has already come with the ADT assay added, which you'd have to add on your own if you were working with your own data.
+- To do that, you'd use the `Read10x` or `Read10X_h5` functions to import your GE and ADT libraries. 
+- At this point you might want to do some filtering on your data to get back cell barcodes where you've got both RNA and ADT data.
+- That might look like this (I've commented out the code here since it won't actually run, you can see the Seurat vignette here https://satijalab.org/seurat/articles/hashing_vignette.html, which shows how to demultiplex cell hashing data):
+
+First, read in the 10X data
+```{r}
+#pbmc.ge <- Read10X("/pbmc_ge/outs/filtered_feature_bc_matrix")
+#pbmc.adt <- Read10X("/pbmc_adt/outs/filtered_feature_bc_matrix")
+```
+
+Then, find the column names (which are cells) where you have data from both assays
+```{r}
+#joint.bcs <- intersect(colnames(pbmc.ge), colnames(pbmc.adt))
+```
+
+Then subset counts by joint cell barcodes
+```{r}
+#pbmc.ge <- pbmc.ge[, joint.bcs]
+#pbmc.adt <- pbmc.adt[, joint.bcs]
+```
+
+Then you'd use the `CreateSeuratObject` function with the gene expression matrix.
+```{r}
+#pbmc_seurat <- CreateSeuratObject(counts = pbmc.ge)
+```
+
+Then add the ADT data as an assay:
+```{r}
+#pbmc_seurat[["ADT"]] <- CreateAssayObject(counts = pbmc.adt)
+```
+
+Let's look at the multimodal seurat object assays:    
+
+For the RNA assay, cells are columns and rows are genes.
+```{r}
+head(rownames(cbmc@assays$RNA))
+head(colnames(cbmc@assays$RNA))
+```
+
+For ADT assay, cells are columns and the rows are cell surface proteins
+```{r}
+rownames(cbmc@assays$ADT)
+head(colnames(cbmc@assays$ADT))
+```
+
+Make sure the RNA is the default assay:
+```{r}
+DefaultAssay(cbmc) <- 'RNA'
+```
+
+We can run through the standard data normalization, clustering, and dimension reduction pipeline, skipping the QC filtering since this is a curated dataset.
+```{r}
+# perform visualization and clustering steps
+cbmc <- SCTransform(cbmc,verbose=FALSE,return.only.var.genes = FALSE)
+cbmc <- RunPCA(cbmc, verbose = FALSE)
+cbmc <- FindNeighbors(cbmc, dims = 1:10)
+cbmc <- FindClusters(cbmc)
+cbmc <- RunUMAP(cbmc, dims = 1:10)
+cbmc <- RunTSNE(cbmc, tsne.method = "FIt-SNE", seed.use=61)
+DimPlot(cbmc, label = TRUE)
+```

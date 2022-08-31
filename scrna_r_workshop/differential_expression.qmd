@@ -1,0 +1,40 @@
+# Differential Expression Testing
+
+Seurat implements differential expression testing using `FindMarkers` and `FindAllMarkers` functions.
+
+- `FindMarkers` finds differentially expressed genes across two identity classes that you specify when calling the function.
+- `FindAllMarkers` finds differentially expressed genes for each identity class compared to a combination of all other identity classes.
+
+By default, these functions implement the Wilcoxon rank sum test, but they also take an argument `test.use` that allows you to use alternative tests if you want to do that (run `?FindMarkers` for more information). If you want to use MAST or DESeq2 you'd have to make sure those packages are installed.
+
+Let's try running some of these tests. First, lets see what identity class our current Seurat object is using.
+
+```{r}
+levels(Idents(all_data_integrated))
+```
+
+Lets make sure we are using the orig.ident as our `Idents`:
+```{r}
+Idents(all_data_integrated) <- 'orig.ident'
+```
+
+And make sure we are using the `RNA` assay:
+
+```{r}
+DefaultAssay(all_data_integrated) <- 'RNA'
+```
+
+Lets run `FindMarkers` comparing IMMUNE_CTRL and IMMUNE_STIM and use some pre-filtering to look at features that have at least a two-fold change in average expression in each comparison and features that are detected in at least 95% of cells in either group.
+
+```{r}
+ctl_vs_stim <- FindMarkers(all_data_integrated, ident.1 = 'IMMUNE_CTRL', ident.2 = 'IMMUNE_STIM', min.pct = 0.95, logfc.threshold = log(2))
+ctl_vs_stim
+```
+
+The results dataframe has the following columns :
+
+    p_val : p_val (unadjusted)
+    avg_log2FC : log fold-change of the average expression between the two groups. Positive values indicate that the feature is more highly expressed in the first group.
+    pct.1 : The percentage of cells where the feature is detected in the first group
+    pct.2 : The percentage of cells where the feature is detected in the second group
+    p_val_adj : Adjusted p-value, based on Bonferroni correction using all features in the dataset.

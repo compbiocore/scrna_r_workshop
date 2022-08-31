@@ -1,0 +1,3 @@
+# Working with multimodal data
+
+Multimodal scRNA-seq is a quickly evolving field that allows simultaneous measurements of multiple types of information from a given cell. We won't discuss these exhaustively, but will briefly cover CITE-seq, cell hashing, and the 10x ATAC + GEX Multiome kits.

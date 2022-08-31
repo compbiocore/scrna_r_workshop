@@ -1,0 +1,60 @@
+# Data Integration
+
+In most cases if we are looking for differences in gene expression between experimental conditions, we will actually want to integrate our datasets rather than merge them. This is because the experimental conditions can cause cells to cluster both by condition and by cell type. See https://satijalab.org/seurat/articles/integration_introduction.html#introduction-to-scrna-seq-integration-1 for more details. 
+
+Here, we will show how to integrate SCTransform-normalized data.
+
+The first step is `SelectIntegrationFeatures()`, which ranks features by the number of datasets they are deemed variable in, breaking ties by the median variable feature rank across datasets, and returns the top scoring features by this ranking.
+
+```{r}
+integration_features <- SelectIntegrationFeatures(all_data_list)
+```
+
+Next, we `PrepSCTIntegration`, which takes a list of objects that have been normalized with SCTransform and performs the following steps:
+- If anchor.features is a numeric value, calls `SelectIntegrationFeatures` to determine the features to use in the downstream integration procedure.
+- Ensures that the sctransform residuals for the features specified to anchor.features are present in each object in the list. This is necessary because the default behavior of SCTransform is to only store the residuals for the features determined to be variable. Residuals are recomputed for missing features using the stored model parameters via the GetResidual function.
+- Subsets the scale.data slot to only contain the residuals for anchor.features for efficiency in downstream processing.
+
+```{r}
+all_data_list <- PrepSCTIntegration(object.list = all_data_list, anchor.features = integration_features)
+```
+
+Find a set of anchors between a list of Seurat objects, they can later be used to integrate the objects using the IntegrateData function.
+```{r}
+anchors <- FindIntegrationAnchors(object.list = all_data_list, normalization.method = "SCT", anchor.features = integration_features)
+```
+
+The last step is integrating the data:
+```{r}
+all_data_integrated <- IntegrateData(anchorset = anchors, normalization.method = "SCT")
+```
+
+Then we can run PCA on the integrated object:
+```{r}
+all_data_integrated <- RunPCA(all_data_integrated)
+ElbowPlot(all_data_integrated)
+```
+
+Then we can also fun UMAP and TSNE:
+```{r}
+all_data_integrated <- RunUMAP(all_data_integrated, dims = 1:10)
+all_data_integrated <- RunTSNE(all_data_integrated, tsne.method = "FIt-SNE", seed.use=61)
+```
+Find neighbors and clusters
+```{r}
+all_data_integrated <- FindNeighbors(all_data_integrated, dims = 1:10)
+all_data_integrated <- FindClusters(all_data_integrated)
+```
+
+```{r}
+DimPlot(all_data_integrated, reduction='tsne', group.by = 'orig.ident')
+DimPlot(all_data_integrated, reduction='umap', group.by = 'orig.ident')
+```
+
+Then we can compare the tsne and umap plots of the merged and integrated datasets. This helps illustrate why we integrate!
+
+```{r}
+DimPlot(all_data_merged, reduction='tsne', group.by = 'orig.ident') + ggtitle("Merged") | DimPlot(all_data_integrated, reduction='tsne', group.by = 'orig.ident') + ggtitle("Integrated")
+
+DimPlot(all_data_merged, reduction='umap', group.by = 'orig.ident') + ggtitle("Merged") | DimPlot(all_data_integrated, reduction='umap', group.by = 'orig.ident') + ggtitle("Integrated")
+```

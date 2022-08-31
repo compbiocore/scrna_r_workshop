@@ -1,0 +1,37 @@
+# Msigdbr
+
+The other input that all of these analyses require is a list of gene sets or pathways of interest. We will use the msigdbr R package. It provides Molecular Signatures Database (MSigDB) gene sets typically used with the Gene Set Enrichment Analysis (GSEA) software (see https://www.gsea-msigdb.org/gsea/msigdb/). The gene sets are divided into collections:
+
+H 	hallmark gene sets  are coherently expressed signatures derived by aggregating many MSigDB gene sets to represent well-defined biological states or processes.
+C1 	positional gene sets  for each human chromosome and cytogenetic band.
+C2 	curated gene sets  from online pathway databases, publications in PubMed, and knowledge of domain experts.
+C3 	regulatory target gene sets  based on gene target predictions for microRNA seed sequences and predicted transcription factor binding sites.
+C4 	computational gene sets  defined by mining large collections of cancer-oriented microarray data.
+C5 	ontology gene sets  consist of genes annotated by the same ontology term.
+C6 	oncogenic signature gene sets  defined directly from microarray gene expression data from cancer gene perturbations.
+C7 	immunologic signature gene sets  represent cell states and perturbations within the immune system.
+C8 	cell type signature gene sets  curated from cluster markers identified in single-cell sequencing studies of human tissue.
+
+First, let's see what gene sets are available for human: 
+
+```{r}
+all_gene_sets <- msigdbr(species = "Homo sapiens")
+all_gene_sets 
+```
+
+I know already that I want to look for genes enriched in this category: https://www.gsea-msigdb.org/gsea/msigdb/cards/REACTOME_INTERFERON_SIGNALING, we know the category and subcategory, so lets filter to just get those sets:
+
+```{r}
+all_gene_msig <- msigdbr(species = "Homo sapiens",category = "C2", subcategory = "CP:REACTOME")
+```
+
+For the sake of getting things to run in a reasonable time for this workshop, let's narrow things down a little more and just pick a few gene modules. We can see what options are available:
+
+```{r}
+unique(all_gene_msig$gs_description)
+
+filtered_genes <- all_gene_msig %>% dplyr::filter(gs_description == 'Interferon Signaling' | gs_description == 'Glycolysis' | gs_description == 'Fatty acid metabolism' | gs_description=="Polymerase switching") %>% dplyr::distinct(gs_name, gene_symbol)
+```
+
+How these gene sets should be formatted varies for each type of package, so we will leave the details for that later.
+

@@ -1,0 +1,17 @@
+## Parallelization options for Seurat and other packages
+
+All of the methods we are discussing here involve computationally heavy methods, and as such also take advantage of parallelization where they can. Often in their documentation you will find how to use multiple cores when calling a function, usually involving a provided argument or involving a package called `future`. For example, Seurat has a [vignette on parallelization](https://satijalab.org/seurat/articles/future_vignette.html) with `future`. We will follow it here:
+
+```{r}
+library(future)
+# check the current active plan
+plan()
+```
+
+We set workers=8 because we've requested 8 cores. Additionally, we set `multisession` instead of `multiprocess` despite what the vignette says, because `multiprocess` is actually deprecated in `future` and we should be explicitly specifying `multisession` or `multicore` instead. Getting into the difference is out of scope of this workshop, but you can [read more](https://cran.r-project.org/web/packages/future/vignettes/future-1-overview.html) on future yourself if interested.
+
+```{r}
+# change the current plan to access parallelization
+plan("multisession", workers = 4)
+plan()
+```

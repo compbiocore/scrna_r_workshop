@@ -1,0 +1,59 @@
+# Multimodal normalization
+
+We'll also normalize the CITE-seq ADT data. We'll use a CLR or centered log ratio transformation (https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5669064/). The `margin` argument indicates if you are normalizing across `features` (margin = 1) or `cells` (margin = 2). The authors of Seurat recommend normalizing across cells in most cases unless there's a big difference in the ADT counts across cells, but note that gene-based normalization can fail if there's differences in sequencing depth or cell size. (https://github.com/satijalab/seurat/issues/2954, https://github.com/satijalab/seurat/issues/871). 
+
+```{r}
+DefaultAssay(cbmc) <- "ADT"
+cbmc <- NormalizeData(cbmc, normalization.method = "CLR", margin = 2)
+```
+
+Then we can visualize our data -- let's look at the CD19 RNA and Protein expression:
+```{r}
+DefaultAssay(cbmc) <- "RNA"
+p1 <- FeaturePlot(cbmc, 
+            features = "CD19", 
+            reduction = 'umap',  
+            order = T) &
+    theme(legend.position = "right") &
+    scale_colour_gradient(low = '#67a9cf', high = '#ef8a62') &
+    labs(title = "RNA - CD19")
+
+DefaultAssay(cbmc) <- "ADT"
+p2 <- FeaturePlot(cbmc, 
+            features = "CD19", 
+            reduction = 'umap',  
+            order = T) &
+    theme(legend.position = "right") &
+    scale_colour_gradient(low = '#67a9cf', high = '#ef8a62') &
+    labs(title = "ADT - CD19")
+
+
+p1 | p2
+```
+
+We can leverage the multimodal data to find protein and RNA markers
+
+First, which clusters of cells are expressing CD19 on their cell surfaces?
+```{r}
+VlnPlot(cbmc, "CD19", assay = "ADT")
+```
+
+Let's look at the ADT markers for cluster 10. You can use the same `FindMarkers` functions that are used for RNA markers.
+```{r}
+adt_markers <- FindMarkers(cbmc, ident.1 = 10, assay = "ADT")
+rna_markers <- FindMarkers(cbmc, ident.1 = 10, assay = "RNA")
+```
+
+```{r}
+head(rna_markers)
+head(adt_markers)
+```
+We see that there are some cell types that express CD19 on their cell surfaces and that information is also reflected in the RNA data, where there's a higher expression of the CD19 gene.
+
+
+
+Let's clear the `cbmc` data before we move on.
+
+```{r}
+rm(cbmc)
+```

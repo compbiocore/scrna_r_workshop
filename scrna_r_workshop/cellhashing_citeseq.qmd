@@ -1,0 +1,19 @@
+# CITE-seq and Cell Hashing
+This workshop will touch on working with CITE-seq data, which simultaneously profiles cell surface protein and gene expression levels (https://www.nature.com/articles/nmeth.4380 and https://cite-seq.com/). 
+
+![sc flow](src/citeseq_flow.png)
+Similar to the standard set-up for 10x gene expression preps, CITE-seq starts with a cell and a barcoded bead encapsulated in a droplet. However, before the encapsulation step, oligo-barcoded antibodies are added to the cells and will bind to the cell surface proteins. 
+   
+![sc flow](src/citeseq_str.png)
+
+The oligo-tagged antibodies look like the above figure. Once the cells are in a droplet with a bead, the bead dissolves and the poly(dT) primer will allow amplification of both the poly-adenylated mRNA and the antibody barcode library. The two cDNA pools are size-separated before library prep continues, so you'll get back a quantitative gene expression and quantitative antibody derived tag (ADT) library. The authors of CITE-seq state: "We have successfully used ~125 antibodies and do not foresee any reason why this number can’t be further increased", but as always this is dependent on the quality of your antibodies.    
+
+CellRanger/10X don't formally support CITE-seq for their own reasons and suggest you contact New York Genome Center/https://cite-seq.com/ or BioLegend for help (https://support.10xgenomics.com/single-cell-gene-expression/software/pipelines/latest/using/feature-bc-analysis#feature-ref).
+
+![sc flow](src/cellhashing.png)
+
+Cell hashing is similar to CITE-seq, but the goal is to pool multiple samples per 10x run rather than to quantify cell surface proteins. It still uses oligo-tagged antibodies, but they target a smaller subset of cell surface proteins that are ubiquitously expressed and each sample has a unique oligo sequence that can be used to bin each cell back to the sample it originated from. A cell hashing experiment would result in an HTO library (HashTag Oligo) and a gene expression library.
+
+![sc flow](src/totalseq.png){height=400px width=300px} 
+
+BioLegend cells TotalSeq kits to run cell hashing experiments. TotalSeq-B and TotalSeq-C are supported by 10x and they use Capture Sequence 1 or the Template Switch Oligo as the capture sequence. Like CITE-seq, TotalSeq-A uses the Poly(dT) capture sequence and is not supported by 10x and they suggest you contact New York Genome Center/https://cite-seq.com/ or BioLegend for help.

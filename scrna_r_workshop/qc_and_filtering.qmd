@@ -1,0 +1,59 @@
+# Data QC and filtering
+
+- We care about the percentage of reads that map to the mitochondrial genome because high mitochondrial reads in a cell can indicate that the cells are low-quality or dying cells
+- The mitochondrial QC metrics are calcualted with the `PercentageFeatureSet()` function, which calculates the percentage of counts originating from a set of features
+- We use the set of all genes starting with MT- as a set of mitochondrial genes -- the format of the mt sequences will vary depending on which organism/genome is used...(might be 'mt-' for example).
+
+```{r "add mt percent data"}
+all_data[["percent.mt"]] <- PercentageFeatureSet(all_data, pattern = "^MT-")
+```
+
+- Before we plot, we can set the order of the object idents to whatever order we'd like:
+```{r}
+Idents(all_data) <- 'orig.ident'
+levels(all_data) <- c("pbmc3k", "IMMUNE_CTRL", "IMMUNE_STIM")
+
+```
+
+- We can also look at plots showing the distribution of the `percent.mt`, `nFeature_RNA` and `nCount_RNA`
+- `nFeature_RNA` is the number of genes 
+- `nCount_RNA` is the number of UMIs (unique molecules -- like counts)
+
+```{r  "QC plots"}
+VlnPlot(all_data, features = "nFeature_RNA")
+VlnPlot(all_data, features = "nCount_RNA")
+VlnPlot(all_data, features="percent.mt")
+
+FeatureScatter(all_data, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+FeatureScatter(all_data, feature1 = "nCount_RNA", feature2 = "percent.mt")
+FeatureScatter(all_data, feature1 = "nFeature_RNA", feature2 = "percent.mt")
+
+```
+- Low quality cells or empty droplets might have very few genes (nFeatures)
+- Dead or dying cells will also have high mitochondrial contamination
+- Doublets or multiplets will have high gene counts (nFeatures)
+- The total number of molecules (nCount) detected in a cell corresponds with the number of genes (nFeatures)
+
+- Most of the cells have less than 2000 genes and less than 7000 or so UMIs.
+- Very low mitochondrial counts from the ifnb data -- perhaps this dataset was pre-filtered before being packaged into SeuratData.
+- We can see groups of cells with high mitochondrial counts, low UMI counts, and lower numbers of genes.
+- Our goal in QC filtering is to retain as much useful information as we can, while removing doublets, empty droplets, and dead cells.
+- We will pick some thresholds for filtering based off of what we see in our data, keeping in mind that if you are doing this with your own data, your plots will probably look very different.
+- Let's filter our data using `subset`, we'll keep cells that have between 500 and 7000 nFeature_RNA (genes) and less than 10% mitochondrial reads.
+
+```{r "Data filtering"}
+all_data_sub <- subset(all_data, subset = nFeature_RNA > 500 & nFeature_RNA < 7000 & percent.mt < 10)
+```
+
+- You can re-examine your QC plots after filtering if you'd like:
+```{r}
+VlnPlot(all_data_sub, features = "nFeature_RNA")
+VlnPlot(all_data_sub, features = "nCount_RNA")
+VlnPlot(all_data_sub, features="percent.mt")
+
+FeatureScatter(all_data_sub, feature1 = "nCount_RNA", feature2 = "percent.mt")
+FeatureScatter(all_data_sub, feature1 = "nFeature_RNA", feature2 = "percent.mt")
+FeatureScatter(all_data_sub, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+```
+
+- Next, we'll use `SCTransform` to normalize -- use as an alternative to the `NormalizeData`, `FindVariableFeatures`, `ScaleData` workflow, which is the default of what Seurat usually suggests.

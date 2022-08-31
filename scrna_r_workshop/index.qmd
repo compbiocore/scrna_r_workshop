@@ -1,0 +1,3 @@
+# Preface {.unnumbered}
+
+This repository contains R markdown files for the analysis of scRNAseq data (mostly in Seurat). It was developed by the [Computational Biology Core](http://cbc.brown.edu/) and is based mainly on the [Seurat vignettes](https://satijalab.org/seurat) and [GitHub repository](https://github.com/satijalab/seurat).

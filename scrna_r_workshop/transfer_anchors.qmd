@@ -1,0 +1,85 @@
+# Working with TransferAnchors from Seurat 
+
+Seurat has a few built in methods to identify shared cell states present across different datasets. They can be different conditions, different individuals, technologies, etc. First, Seurat tries to find anchors between pairs of datasets. These represent pairwise correspondences between individual cells (one in each dataset), that Seurat hypothesizes originate from the same biological state. These ‘anchors’ are then used to harmonize the datasets, or transfer information from one dataset to another. In the first part of this workshop, we went over running data integration with SCTransform-normalized datasets from different experiments. In this follow up session, we will go over how you can leverage an integrated reference dataset to annotate new query datasets. This can be helpful for using cell atlases to annotate cell types in your experimental datasets.
+
+We'll work with the `panc8` data.
+
+```{r}
+panc8
+?panc8
+```
+First, lets split the object and run SCTransform
+
+```{r}
+pancreas.list <- SplitObject(panc8, split.by = "tech")
+```
+
+Then we run SCTransform
+```{r}
+pancreas.list <- lapply(pancreas.list, function(x) {
+    x <- SCTransform(x,verbose=FALSE,return.only.var.genes = FALSE)}) 
+```
+
+To construct a reference, we will identify ‘anchors’ between the individual datasets. We'll pick three of the objects to construct our integrated reference and save one for using as a query later.  
+```{r}
+pancreas.ref <- c(pancreas.list$celseq, pancreas.list$celseq2, pancreas.list$smartseq2)
+pancreas.query <- pancreas.list$fluidigmc1
+```
+
+Then we can `SelectIntegrationFeatures`, `PrepSCTIntegration`, `FindIntegrationAnchors`, and `IntegrateData`, Run PCA and UMAP
+```{r}
+integration_features <- SelectIntegrationFeatures(pancreas.ref)
+pancreas.ref <- PrepSCTIntegration(object.list = pancreas.ref, anchor.features = integration_features)
+ref.anchors <- FindIntegrationAnchors(object.list = pancreas.ref , normalization.method = "SCT", anchor.features = integration_features)
+pancreas.ref <- IntegrateData(anchorset = ref.anchors, normalization.method = "SCT")
+
+pancreas.ref <- RunPCA(pancreas.ref, verbose = FALSE)
+pancreas.ref <- RunUMAP(pancreas.ref, reduction = "pca", dims = 1:20, verbose = FALSE)
+
+p1 <- DimPlot(pancreas.ref, reduction = "umap", split.by = "tech") & coord_fixed(ratio = 1)
+p2 <- DimPlot(pancreas.ref, reduction = "umap", group.by = "celltype", label = TRUE, repel = TRUE) +
+    NoLegend() & coord_fixed(ratio = 1)
+p1 / p2
+```
+
+
+Seurat supports the projection of reference data onto a query object. While many of the methods are conserved (both procedures begin by identifying anchors), there are two important distinctions between data transfer and integration:
+
+    In data transfer, Seurat does not correct or modify the query expression data.
+    In data transfer, Seurat has an option (set by default) to project the PCA structure of a reference onto the query, instead of learning a joint structure with CCA. We generally suggest using this option when projecting data between scRNA-seq datasets.
+
+After finding anchors, we use the `TransferData()` function to classify the query cells based on reference data (a vector of reference cell type labels). `TransferData()` returns a matrix with predicted IDs and prediction scores, which we can add to the query metadata.
+
+First, FindTransferAnchors between pancreas.ref and pancreas.query.
+```{r}
+pancreas.anchors <- FindTransferAnchors(reference = pancreas.ref, 
+                                        query = pancreas.query,
+                                        dims = 1:20, 
+                                        reference.reduction = "pca")
+```
+
+Classify query cells based on reference data
+```{r}
+predictions <- TransferData(anchorset = pancreas.anchors, 
+                            refdata = pancreas.ref$celltype,
+                            dims = 1:20)
+```
+
+Add the cell predictions to the pancreas.query metadata
+```{r}
+pancreas.query <- AddMetaData(pancreas.query, metadata = predictions)
+```
+
+Because we have the original label annotations from our full integrated analysis, we can evaluate how well our predicted cell type annotations match the full reference. In this example, we find that there is a high agreement in cell type classification, with over 96% of cells being labeled correctly.
+```{r}
+pancreas.query$prediction.match <- pancreas.query$predicted.id == pancreas.query$celltype
+table(pancreas.query$prediction.match)
+```
+
+Lets clean up a little before we continue:
+```{r}
+rm(panc8)
+rm(pancreas.list)
+rm(pancreas.ref)
+rm(pancreas.query)
+```

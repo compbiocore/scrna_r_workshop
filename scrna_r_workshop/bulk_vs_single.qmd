@@ -1,0 +1,15 @@
+# How does scRNA-seq differ from bulk RNA-seq?
+
+![bulk vs single cell](./src/bulk_vs_singlecell.png)
+- In bulk RNA-seq you are taking a snapshot of expression of all the cells in a sample and your measurements are aggregated across all of those cells.
+
+- In scRNA-seq, you can get a sense of the heterogeneity of the cells in your sample.
+    - Are there novel or rare cell types?
+    - What about cell type specific gene expression?
+    - Does the distribution of different cell types change across time or treatment?
+- This increased resolution comes with some unique challenges.
+    - Dropouts - genes that are not detected in some cells, can lead to sparse expression matrices with many zero values.
+    - Doublets - sequencing two cells at the same time and can't distinguish their expression or cell types, need to filter these out during QC.
+    - Dying cells - you will lose some cells because they are dead or dying, you can also filter these out during sample QC.
+    - You also should be cautious when thinking about your sample sizes. For example, you may be sequencing thousands of cells but if they all come from the same mouse you lose the ability to generalize your findings.
+   

@@ -1,0 +1,95 @@
+# Data Visualization
+
+- Seurat comes with many functions for visualizing your data. Conveniently, you can use `ggplot`-like syntax to tweak your figures as needed. 
+- First, lets switch to the `SCT` assay for our visualization.
+
+```{r}
+DefaultAssay(all_data_integrated) <- 'SCT'
+```
+
+- We can make a `FeaturePlot`, which uses the `data` slot by default.
+- SCT assay slots are counts, data, and scale.data, which are the corrected counts, log1p(counts), and pearson residuals.
+
+```{r}
+FeaturePlot(all_data_integrated, 
+            features = rownames(ctl_vs_stim)[1:2], 
+            reduction = 'umap',  
+            order = T, 
+            split.by = 'orig.ident')
+```
+
+We can use `ggplot` syntax to add legends:
+```{r}
+FeaturePlot(all_data_integrated, 
+            features = rownames(ctl_vs_stim)[1:2], 
+            reduction = 'umap',  
+            order = T, 
+            split.by = 'orig.ident') +
+   theme(legend.position = "right")
+```
+
+Note that we are only getting the legend on the last plot that we get when we use the `split.by` argument. This is probably not what we want. If we use the `&` symbol instead of `+`, we can get the legend to populate to all the figures:
+```{r}
+FeaturePlot(all_data_integrated, 
+            features = rownames(ctl_vs_stim)[1:2], 
+            reduction = 'umap',  
+            order = T, 
+            split.by = 'orig.ident') &
+   theme(legend.position = "right")
+```
+We can also use customized colors:
+
+```{r}
+
+FeaturePlot(all_data_integrated, 
+            features = rownames(ctl_vs_stim)[1:2], 
+            reduction = 'umap',  
+            order = T, 
+            split.by = 'orig.ident') &
+    theme(legend.position = "right") &
+    scale_colour_gradientn(colours = rev(brewer.pal(n = 11, name = "Spectral"))) 
+```
+
+We have used `VlnPlot` to look at our QC metrics earlier. We can also use it to look expression across clusters, it uses the `counts` slot by default. First, switch to using the clusters as idents:
+
+```{r}
+Idents(all_data_integrated) <- 'seurat_clusters'
+```
+
+```{r}
+VlnPlot(all_data_integrated,features = rownames(ctl_vs_stim)[1])
+```
+
+If you split.by orig.ident you'll get plots that are colored a little differently (but start to look a bit crowded):
+```{r}
+VlnPlot(all_data_integrated, split.by = 'orig.ident', features = rownames(ctl_vs_stim)[1])
+```
+
+Another helpful visualization from Seurat is `DotPlot`. The size of each dot indicates the percentage of cells expressing the feature and the color is the average expression level. It uses the scale.data slot by default.
+
+```{r}
+DotPlot(all_data_integrated, features = rownames(ctl_vs_stim)[1:5]) & 
+    RotatedAxis() 
+```
+
+We can use more custom colors:
+
+```{r}
+DotPlot(all_data_integrated, features = rownames(ctl_vs_stim)[1:5]) &
+    RotatedAxis() & 
+    scale_color_viridis(option = "magma", direction = -1) 
+```
+
+Seurat also makes heatmaps with `DoHeatmap`, which also uses the "scale.data" slot. We'll switch to the `RNA` slot.
+
+```{r}
+Idents(all_data_integrated) <-  'orig.ident'
+DefaultAssay(all_data_integrated) <-  'RNA'
+DoHeatmap(all_data_integrated, features = rownames(ctl_vs_stim)[1:5])
+```
+
+We can use custom colors again if we'd like:
+```{r}
+DoHeatmap(pbmc1k, features = all_cluster_markers$gene[1:3]) & 
+   scale_fill_gradient2( low = c('#2c7bb6', '#abd9e9'), mid = '#ffffbf', high = c('#fdae61', '#d7191c')) 
+```

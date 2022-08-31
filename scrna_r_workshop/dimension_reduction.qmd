@@ -1,0 +1,24 @@
+# Dimension Reduction
+
+- Seurat offers several non-linear dimensional reduction technique to visualize and explore these datasets (umap, tsne). 
+- The goal of these algorithms is to learn the underlying manifold of the data in order to place similar cells together in low-dimensional space. 
+- As input to the UMAP and tSNE, we suggest using the same PCs as input to the clustering analysis. 
+- We recommend using FIt-SNE to make things faster. It is based on Kluger Lab code found here: https://github.com/KlugerLab/FIt-SNE 
+
+
+```{r}
+all_data_merged <- RunUMAP(all_data_merged, dims = 1:10)
+all_data_merged <- RunTSNE(all_data_merged, tsne.method = "FIt-SNE", seed.use=61)
+```
+
+- Look at the clusters using `DimPlot()` function
+```{r}
+DimPlot(all_data_merged, reduction='tsne')
+DimPlot(all_data_merged, reduction='umap')
+```
+
+- Group the plots by the `idents`
+```{r}
+DimPlot(all_data_merged, reduction='tsne', group.by = 'orig.ident')
+DimPlot(all_data_merged, reduction='umap', group.by = 'orig.ident')
+```

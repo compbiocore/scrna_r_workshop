@@ -1,0 +1,48 @@
+# 10X Multiome kit
+
+![sc flow](src/atac_bead.png){height=175px width=500px} 
+
+The 10x Multiome ATAC + GEX kits let you look at areas of open chromatin and gene expression at the same time. They use a similar approach to the others described above, where a gel bead has primers/capture sequences for gene expression libraries and ATAC-seq libraries. The general workflow starts with isolating single nuclei (rather than single cells). Then, single nuclei are treated with a transposase that fragments DNA in open chromatin areas and adds adapter sequences to the ends of the fragments. The gel beads contain the usual Poly(dT) to amplify poly-adenylated mRNA and also a 'Spacer' sequence that acts as a capture sequence for the ATAC-seq libraries that sequence areas of open chromatin. 
+
+Let's go over the details of how the library prep works for 10x feature barcoding libaries:
+- Some of these images are really wide and are getting cut off -- feel free to follow along here: https://teichlab.github.io/scg_lib_structs/methods_html/10xChromium3fb.html
+
+![sc bead](src/fbc_step1.png)
+
+The first step is sequence capture by the poly(dT) and Capture Sequence 1 or 2 and MMLV (Moloney Murine Leukemia Virus) reverse transcription.
+
+![sc bead](src/fbc_step2.png)
+
+
+Just like the previous discussion of the GE libraries, MMLV adds extra Cs
+
+![sc bead](src/fbc_step3.png)
+The template-switching oligo is added so we can continue across the other strand.
+
+![sc bead](src/fbc_step4.png)
+Adding the primers to amplify cDNA
+
+![sc bead](src/fbc_step5.png)
+At this point your different products will be different sizes so you can separate with size selection, unless its a CRISPR screen library --these need some extra PCR steps:
+
+![sc bead](src/fbc_step6.png)
+If you do have a CRISPR screen library, perform that extra PCR step.
+
+![sc bead](src/fbc_step7.png)
+
+Add the primers for library PCR to the products from step 5 (step 6 if CRISPR library).
+
+![sc bead](src/fbc_step8.png)
+
+Here's the final library structures for mRNA, surface protein libraries that use capture sequence 1, or CRISPR screen library.
+
+![sc bead](src/fbcseq_step1.png)
+
+For the sequencing, add the read 1 primers to sequence read 1 using the bottom strand as template sequences the cell barcode and UMI.
+
+![sc bead](src/fbcseq_step2.png)
+
+Sample index primer sequences the sample index from bottom strand (getting cut off for the surface protein and CRISPR libraries but all libraries do this step)
+
+![sc bead](src/fbcseq_step3.png)
+Cluster regeneration and add read 2 primer, sequences second read from the top strand (CRISPR library is getting cut off but you can view the source image at https://teichlab.github.io/scg_lib_structs/methods_html/10xChromium3fb.html).
