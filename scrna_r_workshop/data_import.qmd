@@ -3,6 +3,7 @@
  - We are using the `SeuratData` package for some test data. 
  - Use `AvailableData()` to see what datasets are available
 ```{r}
+library(SeuratData)
 AvailableData()
 ```
 

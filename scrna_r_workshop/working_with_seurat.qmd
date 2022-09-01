@@ -3,8 +3,12 @@
 - We can look at the Seurat objects we've loaded from SeuratData:
 
 ```{r}
-ifnb
+library('pbmc3k.SeuratData')
+library('ifnb.SeuratData')
+data("pbmc3k")
+data("ifnb")
 pbmc3k
+ifnb
 ```
 - The `pbmc3k` dataset is 2,700 peripheral blood mononuclear cells (PBMC) from 10X genomics.
 ```{r}

@@ -10,6 +10,7 @@ Let's get started. First, we'll need to set the `.libPaths()` since we are using
 - We also set `future.globals.maxSize`, see this link for discussion about why we do that (basically we might be exceeding the allowed global variable size so we make them bigger) https://satijalab.org/seurat/archive/v3.0/future_vignette.html
 
 ```{r}
+library(future)
 set.seed(61)
 options(future.globals.maxSize = 4000 * 1024^5)
 plan("multiprocess", workers = 4)

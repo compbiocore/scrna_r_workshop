@@ -47,11 +47,10 @@ book:
         - norm_and_markers_citeseq.qmd
     - part: "Controlling for Type I error in estimated clusters"
       chapters:        
-        - cluster_pvalue.rmd     
+        - cluster_pvalue.qmd     
     - part: "Working with Transfer Anchors to transfer information across datasets"
       chapters:        
-        - transfer_anchors.qmd
-        - cluster_pvalue.rmd     
+        - transfer_anchors.qmd   
     - part: "Approaches to pathway analyses with single cell data"
       chapters:        
         - pathway.qmd
@@ -61,8 +60,6 @@ book:
         - idea.qmd
         
   number-depth: 1
-
-bibliography: references.bib
 
 format:
   html:
