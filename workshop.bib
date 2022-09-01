@@ -1,0 +1,118 @@
+@article{Davie2018,
+abstract = {The diversity of cell types and regulatory states in the brain, and how these change during aging, remains largely unknown. We present a single-cell transcriptome atlas of the entire adult Drosophila melanogaster brain sampled across its lifespan. Cell clustering identified 87 initial cell clusters that are further subclustered and validated by targeted cell-sorting. Our data show high granularity and identify a wide range of cell types. Gene network analyses using SCENIC revealed regulatory heterogeneity linked to energy consumption. During aging, RNA content declines exponentially without affecting neuronal identity in old brains. This single-cell brain atlas covers nearly all cells in the normal brain and provides the tools to study cellular diversity alongside other Drosophila and mammalian single-cell datasets in our unique single-cell analysis platform: SCope (http://scope.aertslab.org). These results, together with SCope, allow comprehensive exploration of all transcriptional states of an entire aging brain. A single-cell atlas of adult fly brains identifies the ensemble of neuronal and glial cell types and their dynamic changes during aging.},
+author = {Davie, Kristofer and Janssens, Jasper and Koldere, Duygu and {De Waegeneer}, Maxime and Pech, Uli and Kreft, {\L}ukasz and Aibar, Sara and Makhzami, Samira and Christiaens, Valerie and {Bravo Gonz{\'{a}}lez-Blas}, Carmen and Poovathingal, Suresh and Hulselmans, Gert and Spanier, Katina I. and Moerman, Thomas and Vanspauwen, Bram and Geurs, Sarah and Voet, Thierry and Lammertyn, Jeroen and Thienpont, Bernard and Liu, Sha and Konstantinides, Nikos and Fiers, Mark and Verstreken, Patrik and Aerts, Stein},
+doi = {10.1016/j.cell.2018.05.057},
+file = {:Users/aguang/CORE/scRNAseq/papers/1-s2.0-S0092867418307207-main.pdf:pdf},
+issn = {10974172},
+journal = {Cell},
+keywords = {Drosophila,aging,brain,gene regulatory networks,mitochondria,neuronal subtypes,oxidative phosphorylation,single-cell RNA-seq,single-cell bioinformatics},
+mendeley-groups = {scRNAseq},
+number = {4},
+pages = {982--998.e20},
+pmid = {29909982},
+title = {{A Single-Cell Transcriptome Atlas of the Aging Drosophila Brain}},
+volume = {174},
+year = {2018}
+}
+
+
+@article{Finak2015,
+	Abstract = {Single-cell transcriptomics reveals gene expression heterogeneity but suffers from stochastic dropout and characteristic bimodal expression distributions in which expression is either strongly non-zero or non-detectable. We propose a two-part, generalized linear model for such bimodal data that parameterizes both of these features. We argue that the cellular detection rate, the fraction of genes expressed in a cell, should be adjusted for as a source of nuisance variation. Our model provides gene set enrichment analysis tailored to single-cell data. It provides insights into how networks of co-expressed genes evolve across an experimental treatment. MAST is available at https://github.com/RGLab/MAST.},
+	Author = {Finak, Greg and McDavid, Andrew and Yajima, Masanao and Deng, Jingyuan and Gersuk, Vivian and Shalek, Alex K. and Slichter, Chloe K. and Miller, Hannah W. and McElrath, M. Juliana and Prlic, Martin and Linsley, Peter S. and Gottardo, Raphael},
+	Da = {2015/12/10},
+	Date-Added = {2022-06-09 20:34:10 +0000},
+	Date-Modified = {2022-06-09 20:34:10 +0000},
+	Doi = {10.1186/s13059-015-0844-5},
+	Id = {Finak2015},
+	Isbn = {1474-760X},
+	Journal = {Genome Biology},
+	Number = {1},
+	Pages = {278},
+	Title = {MAST: a flexible statistical framework for assessing transcriptional changes and characterizing heterogeneity in single-cell RNA sequencing data},
+	Ty = {JOUR},
+	Url = {https://doi.org/10.1186/s13059-015-0844-5},
+	Volume = {16},
+	Year = {2015},
+	Bdsk-Url-1 = {https://doi.org/10.1186/s13059-015-0844-5},
+	Bdsk-Url-2 = {http://dx.doi.org/10.1186/s13059-015-0844-5}}
+
+
+@article{Gao2021,
+archivePrefix = {arXiv},
+arxivId = {arXiv:2012.02936v2},
+author = {Gao, Lucy L and Bien, Jacob and Witten, Daniela},
+eprint = {arXiv:2012.02936v2},
+file = {:Users/aguang/Library/Application Support/Mendeley Desktop/Downloaded/Gao, Bien, Witten - 2021 - Selective Inference for Hierarchical Clustering.pdf:pdf},
+keywords = {difference in means,hypothesis testing,post-selection inference,type i error},
+mendeley-groups = {singlecell},
+pages = {1--55},
+title = {{Selective Inference for Hierarchical Clustering}},
+year = {2021}
+}
+
+
+@article{Hafemeister2019,
+abstract = {Single-cell RNA-seq (scRNA-seq) data exhibits significant cell-to-cell variation due to technical factors, including the number of molecules detected in each cell, which can confound biological heterogeneity with technical effects. To address this, we present a modeling framework for the normalization and variance stabilization of molecular count data from scRNA-seq experiments. We propose that the Pearson residuals from "regularized negative binomial regression," where cellular sequencing depth is utilized as a covariate in a generalized linear model, successfully remove the influence of technical characteristics from downstream analyses while preserving biological heterogeneity. Importantly, we show that an unconstrained negative binomial model may overfit scRNA-seq data, and overcome this by pooling information across genes with similar abundances to obtain stable parameter estimates. Our procedure omits the need for heuristic steps including pseudocount addition or log-transformation and improves common downstream analytical tasks such as variable gene selection, dimensional reduction, and differential expression. Our approach can be applied to any UMI-based scRNA-seq dataset and is freely available as part of the R package sctransform, with a direct interface to our single-cell toolkit Seurat.},
+annote = {So basically, usual normalization is to scale counts by size factors, then add and do log transform
+
+This one is GLM of cellular sequencing depth to counts. Pearson residuals of model represent VST
+
+Oh, down in the methods they highlight that this is bascially DESeq2, only they use (log10) m{\_}j = number of molecules for cell j instead of sample specific size factor s{\_}j, cool... can't believe this was a whole paper though! but the results are nice},
+author = {Hafemeister, Christoph and Satija, Rahul},
+doi = {10.1186/s13059-019-1874-1},
+file = {:Users/aguang/Dropbox (Brown)/Research/Papers/singlecell/s13059-019-1874-1.pdf:pdf},
+issn = {1474760X},
+journal = {Genome Biology},
+keywords = {Normalization,Single-cell RNA-seq},
+mendeley-groups = {singlecell},
+number = {1},
+pages = {1--15},
+publisher = {Genome Biology},
+title = {{Normalization and variance stabilization of single-cell RNA-seq data using regularized negative binomial regression}},
+volume = {20},
+year = {2019}
+}
+
+@article{Linderman2019,
+abstract = {t-distributed stochastic neighbor embedding (t-SNE) is widely used for visualizing single-cell RNA-sequencing (scRNA-seq) data, but it scales poorly to large datasets. We dramatically accelerate t-SNE, obviating the need for data downsampling, and hence allowing visualization of rare cell populations. Furthermore, we implement a heatmap-style visualization for scRNA-seq based on one-dimensional t-SNE for simultaneously visualizing the expression patterns of thousands of genes. Software is available at https://github.com/KlugerLab/FIt-SNE and https://github.com/KlugerLab/t-SNE-Heatmaps.},
+author = {Linderman, George C. and Rachh, Manas and Hoskins, Jeremy G. and Steinerberger, Stefan and Kluger, Yuval},
+doi = {10.1038/s41592-018-0308-4},
+issn = {15487105},
+journal = {Nature Methods},
+pmid = {30742040},
+title = {{Fast interpolation-based t-SNE for improved visualization of single-cell RNA-seq data}},
+year = {2019}
+}
+
+@article{Ma2020,
+abstract = {Differential expression (DE) analysis and gene set enrichment (GSE) analysis are commonly applied in single cell RNA sequencing (scRNA-seq) studies. Here, we develop an integrative and scalable computational method, iDEA, to perform joint DE and GSE analysis through a hierarchical Bayesian framework. By integrating DE and GSE analyses, iDEA can improve the power and consistency of DE analysis and the accuracy of GSE analysis. Importantly, iDEA uses only DE summary statistics as input, enabling effective data modeling through complementing and pairing with various existing DE methods. We illustrate the benefits of iDEA with extensive simulations. We also apply iDEA to analyze three scRNA-seq data sets, where iDEA achieves up to five-fold power gain over existing GSE methods and up to 64% power gain over existing DE methods. The power gain brought by iDEA allows us to identify many pathways that would not be identified by existing approaches in these data.},
+annote = {Extensions and questions:
+- Does not provide an idea or statistic for what genesets are more interesting than others
+- Would providing gene set enrichment scores as an additional prior lead to different results or faster convergence? This is because 1) method uses MCMC for convergence and 2) shows that GSE methods aren't inaccurate just conservative
+- Score for interesting geneset could be created based on presence/absence across multiple genesets, i.e. weight of a gene in a geneset should be lowered if it's present in many other genesets, raised if not present},
+author = {Ma, Ying and Sun, Shiquan and Shang, Xuequn and Keller, Evan T. and Chen, Mengjie and Zhou, Xiang},
+doi = {10.1038/s41467-020-15298-6},
+file = {:Users/aguang/Dropbox (Brown)/Research/Papers/singlecell/pathway analysis/s41467-020-15298-6.pdf:pdf},
+issn = {20411723},
+journal = {Nature Communications},
+mendeley-groups = {singlecell/pathway enrichment analysis},
+number = {1},
+pmid = {32221292},
+publisher = {Springer US},
+title = {{Integrative differential expression and gene set enrichment analysis using summary statistics for scRNA-seq studies}},
+url = {http://dx.doi.org/10.1038/s41467-020-15298-6},
+volume = {11},
+year = {2020}
+}
+
+
+@article{Stuart2019,
+abstract = {Single-cell transcriptomics has transformed our ability to characterize cell states, but deep biological understanding requires more than a taxonomic listing of clusters. As new methods arise to measure distinct cellular modalities, a key analytical challenge is to integrate these datasets to better understand cellular identity and function. Here, we develop a strategy to “anchor” diverse datasets together, enabling us to integrate single-cell measurements not only across scRNA-seq technologies, but also across different modalities. After demonstrating improvement over existing methods for integrating scRNA-seq data, we anchor scRNA-seq experiments with scATAC-seq to explore chromatin differences in closely related interneuron subsets and project protein expression measurements onto a bone marrow atlas to characterize lymphocyte populations. Lastly, we harmonize in situ gene expression and scRNA-seq datasets, allowing transcriptome-wide imputation of spatial gene expression patterns. Our work presents a strategy for the assembly of harmonized references and transfer of information across datasets.},
+author = {Stuart, Tim and Butler, Andrew and Hoffman, Paul and Hafemeister, Christoph and Papalexi, Efthymia and Mauck, William M. and Hao, Yuhan and Stoeckius, Marlon and Smibert, Peter and Satija, Rahul},
+doi = {10.1016/j.cell.2019.05.031},
+issn = {10974172},
+journal = {Cell},
+keywords = {integration,multi-modal,scATAC-seq,scRNA-seq,single cell,single-cell ATAC sequencing,single-cell RNA sequencing},
+title = {{Comprehensive Integration of Single-Cell Data}},
+year = {2019}
+}
