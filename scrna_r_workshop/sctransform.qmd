@@ -1,4 +1,26 @@
 # SCTransform
+```{r, include=FALSE}
+load('cache.RData')
+library(RColorBrewer)
+library(Seurat)
+library(patchwork)
+library(ggplot2)
+library(dplyr)
+library(hdf5r)
+library(stringr)
+library(biomaRt)
+library(viridis)
+library(SeuratDisk)
+library(SeuratData)
+library(msigdbr)
+library('pbmc3k.SeuratData')
+library('cbmc.SeuratData')
+library('ifnb.SeuratData')
+data("pbmc3k")
+data("cbmc")
+data("ifnb")
+```
+
 - We'll use `SCTransform` to normalize -- use as an alternative to the `NormalizeData`, `FindVariableFeatures`, `ScaleData` workflow, which is the default of what Seurat usually suggests.   
 - First, split the merged object by `orig.ident`.   
 
@@ -24,3 +46,7 @@ all_data_list <- lapply(all_data_split, function(x) {
     x <- SCTransform(x,verbose=FALSE,return.only.var.genes = FALSE)}) # if you run this you might get several iteration limit reached issues
 ```
 - When you run SCTransform you need to specify an additional parameter otherwise only the variable genes will be included in the scale data slot. Add return.only.var.genes = FALSE to the function call and that should solve the issue (https://github.com/satijalab/seurat/issues/3553).
+
+```{r, include=FALSE}
+save.image(file='cache.RData')
+```

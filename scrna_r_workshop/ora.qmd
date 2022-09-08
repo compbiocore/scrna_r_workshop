@@ -1,5 +1,36 @@
 # Overrepresentation analysis
-
+```{r, include=FALSE}
+load('cache.RData')
+library(RColorBrewer)
+library(Seurat)
+library(patchwork)
+library(ggplot2)
+library(dplyr)
+library(hdf5r)
+library(stringr)
+library(biomaRt)
+library(kableExtra)
+library(knitr)
+library(pdftools)
+library(viridis)
+library(openxlsx)
+library(SeuratDisk)
+library(SeuratData)
+library(ComplexHeatmap)
+library(plotly)
+library(iDEA)
+library(fgsea)
+library(clusterpval)
+library(msigdbr)
+library('pbmc3k.SeuratData')
+library('cbmc.SeuratData')
+library('ifnb.SeuratData')
+library('panc8.SeuratData')
+data("pbmc3k")
+data("cbmc")
+data("ifnb")
+data("panc8")
+```
 Overrepresentation analysis (ORA) actually has quite a simple formula to compute the p-value for a given gene set. If N is the total number of genes in the background distribution (the list of all genes across all the gene sets), M the number of genes within the gene set that are in the background, n the size of the list of DE gnes, and k the number of DE genes that are in the gene set, then the p-value can be computed with the hypergeometric distribution
 
 $$ p = 1 - \sum_{i=0}^{k-1} \frac{\binom{M}{i} \binom{N-M}{n-i}}{\binom{N}{n}} $$
@@ -17,3 +48,7 @@ ora@result
 
 As we can see, the interferon signaling pathway has a significant pvalue, but the other 3 pathways do not. The results also include a GeneRatio and a BgRatio, corresponding to M/N and k/n respectively. This is in line with our expectations. Although ORA is rather simple, it's a good first step to check your expectations quickly before moving on to more complicated analyses.
 
+
+```{r, include=FALSE}
+save.image(file='cache.RData')
+```

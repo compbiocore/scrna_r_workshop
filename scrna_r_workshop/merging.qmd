@@ -6,6 +6,15 @@
 - The original project ID will remain stored in object meta data under orig.ident
 
 ```{r "merge"}
+library('pbmc3k.SeuratData')
+library('ifnb.SeuratData')
+data("pbmc3k")
+data("ifnb")
+pbmc3k
+ifnb
 all_data <- merge(x = ifnb, y = pbmc3k, add.cell.ids = c("ifnb", "pbmc3k"), project = 'pbmc')
 unique(all_data@meta.data$orig.ident)
 ```
+```{r, include=FALSE}
+save.image(file='cache.RData')
+````

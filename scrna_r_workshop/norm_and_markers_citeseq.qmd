@@ -1,6 +1,38 @@
 # Multimodal normalization
+```{r, include=FALSE}
+load('cache.RData')
+library(RColorBrewer)
+library(Seurat)
+library(patchwork)
+library(ggplot2)
+library(dplyr)
+library(hdf5r)
+library(stringr)
+library(biomaRt)
+library(kableExtra)
+library(knitr)
+library(pdftools)
+library(viridis)
+library(openxlsx)
+library(SeuratDisk)
+library(SeuratData)
+library(ComplexHeatmap)
+library(plotly)
+library(iDEA)
+library(fgsea)
+library(clusterpval)
+library(msigdbr)
+library('pbmc3k.SeuratData')
+library('cbmc.SeuratData')
+library('ifnb.SeuratData')
+library('panc8.SeuratData')
+data("pbmc3k")
+data("cbmc")
+data("ifnb")
+data("panc8")
+```
 
-We'll also normalize the CITE-seq ADT data. We'll use a CLR or centered log ratio transformation (https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5669064/). The `margin` argument indicates if you are normalizing across `features` (margin = 1) or `cells` (margin = 2). The authors of Seurat recommend normalizing across cells in most cases unless there's a big difference in the ADT counts across cells, but note that gene-based normalization can fail if there's differences in sequencing depth or cell size. (https://github.com/satijalab/seurat/issues/2954, https://github.com/satijalab/seurat/issues/871). 
+We will also normalize the CITE-seq ADT data. We will use a CLR or centered log ratio transformation (https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5669064/). The `margin` argument indicates if you are normalizing across `features` (margin = 1) or `cells` (margin = 2). The authors of Seurat recommend normalizing across cells in most cases unless there is a big difference in the ADT counts across cells, but note that gene-based normalization can fail if there are differences in sequencing depth or cell size. (https://github.com/satijalab/seurat/issues/2954, https://github.com/satijalab/seurat/issues/871). 
 
 ```{r}
 DefaultAssay(cbmc) <- "ADT"
@@ -56,4 +88,9 @@ Let's clear the `cbmc` data before we move on.
 
 ```{r}
 rm(cbmc)
+```
+
+
+```{r, include=FALSE}
+save.image(file='cache.RData')
 ```

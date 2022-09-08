@@ -1,5 +1,36 @@
 # Msigdbr
-
+```{r, include=FALSE}
+load('cache.RData')
+library(RColorBrewer)
+library(Seurat)
+library(patchwork)
+library(ggplot2)
+library(dplyr)
+library(hdf5r)
+library(stringr)
+library(biomaRt)
+library(kableExtra)
+library(knitr)
+library(pdftools)
+library(viridis)
+library(openxlsx)
+library(SeuratDisk)
+library(SeuratData)
+library(ComplexHeatmap)
+library(plotly)
+library(iDEA)
+library(fgsea)
+library(clusterpval)
+library(msigdbr)
+library('pbmc3k.SeuratData')
+library('cbmc.SeuratData')
+library('ifnb.SeuratData')
+library('panc8.SeuratData')
+data("pbmc3k")
+data("cbmc")
+data("ifnb")
+data("panc8")
+```
 The other input that all of these analyses require is a list of gene sets or pathways of interest. We will use the msigdbr R package. It provides Molecular Signatures Database (MSigDB) gene sets typically used with the Gene Set Enrichment Analysis (GSEA) software (see https://www.gsea-msigdb.org/gsea/msigdb/). The gene sets are divided into collections:
 
 H 	hallmark gene sets  are coherently expressed signatures derived by aggregating many MSigDB gene sets to represent well-defined biological states or processes.
@@ -34,4 +65,6 @@ filtered_genes <- all_gene_msig %>% dplyr::filter(gs_description == 'Interferon 
 ```
 
 How these gene sets should be formatted varies for each type of package, so we will leave the details for that later.
-
+```{r, include=FALSE}
+save.image(file='cache.RData')
+```

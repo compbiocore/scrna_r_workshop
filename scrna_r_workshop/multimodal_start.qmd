@@ -1,5 +1,9 @@
 # Importing Multimodal Data
 
+```{r, include=FALSE}
+load('cache.RData')
+```
+
 Let's try working with some multimodal data in Seurat.
 
 As in the previous workshop, we'll need to set the `.libPaths()`, set a seed and `future.globals.maxSize`, and import the libraries.
@@ -38,7 +42,6 @@ data("pbmc3k")
 data("cbmc")
 data("ifnb")
 data("panc8")
-
 ```
 
 We'll work with the `cbmc` data for this section of the workshop, which is 8,617 cord blood mononuclear cells (CBMCs), produced with CITE-seq 
@@ -107,4 +110,8 @@ cbmc <- FindClusters(cbmc)
 cbmc <- RunUMAP(cbmc, dims = 1:10)
 cbmc <- RunTSNE(cbmc, tsne.method = "FIt-SNE", seed.use=61)
 DimPlot(cbmc, label = TRUE)
+```
+
+```{r, include=FALSE}
+save.image(file='cache.RData')
 ```

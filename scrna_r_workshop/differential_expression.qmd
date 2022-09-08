@@ -1,4 +1,25 @@
 # Differential Expression Testing
+```{r, include=FALSE}
+load('cache.RData')
+library(RColorBrewer)
+library(Seurat)
+library(patchwork)
+library(ggplot2)
+library(dplyr)
+library(hdf5r)
+library(stringr)
+library(biomaRt)
+library(viridis)
+library(SeuratDisk)
+library(SeuratData)
+library(msigdbr)
+library('pbmc3k.SeuratData')
+library('cbmc.SeuratData')
+library('ifnb.SeuratData')
+data("pbmc3k")
+data("cbmc")
+data("ifnb")
+```
 
 Seurat implements differential expression testing using `FindMarkers` and `FindAllMarkers` functions.
 
@@ -38,3 +59,7 @@ The results dataframe has the following columns :
     pct.1 : The percentage of cells where the feature is detected in the first group
     pct.2 : The percentage of cells where the feature is detected in the second group
     p_val_adj : Adjusted p-value, based on Bonferroni correction using all features in the dataset.
+
+```{r, include=FALSE}
+save.image(file='cache.RData')
+```

@@ -38,3 +38,7 @@ data("pbmc3k")
 data("cbmc")
 data("ifnb")
 ```
+
+```{r, include=FALSE}
+save.image(file='cache.RData')
+````

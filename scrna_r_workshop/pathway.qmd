@@ -1,5 +1,36 @@
 # Pathway / gene set analysis
-
+```{r, include=FALSE}
+load('cache.RData')
+library(RColorBrewer)
+library(Seurat)
+library(patchwork)
+library(ggplot2)
+library(dplyr)
+library(hdf5r)
+library(stringr)
+library(biomaRt)
+library(kableExtra)
+library(knitr)
+library(pdftools)
+library(viridis)
+library(openxlsx)
+library(SeuratDisk)
+library(SeuratData)
+library(ComplexHeatmap)
+library(plotly)
+library(iDEA)
+library(fgsea)
+library(clusterpval)
+library(msigdbr)
+library('pbmc3k.SeuratData')
+library('cbmc.SeuratData')
+library('ifnb.SeuratData')
+library('panc8.SeuratData')
+data("pbmc3k")
+data("cbmc")
+data("ifnb")
+data("panc8")
+```
 Pathway analysis, sometimes known as gene set analysis, attempts to identify genes that are over-represented in a set of genes that make up pathways associated with various mechanisms. You can think of it like this: if a particular pathway consists of 300 genes, and 280 of those 300 genes are in our list of differentially expressed genes, then is that pathway relevant to the differences between our groups of interest?
 
 Two commonly used methods to look for enrichment are overrepresentation analysis (ORA) or gene set enrichment analysis (GSEA).
@@ -48,3 +79,6 @@ Idents(ifnb_integrated) <- 'stim'
 ctl_vs_stim <- FindMarkers(ifnb_integrated, ident.1 = 'CTRL', ident.2 = 'STIM', test.use="MAST", min.cells.group = 1, min.cells.feature = 1, min.pct = 0, logfc.threshold = 0, only.pos = FALSE)
 ```
 
+```{r, include=FALSE}
+save.image(file='cache.RData')
+```

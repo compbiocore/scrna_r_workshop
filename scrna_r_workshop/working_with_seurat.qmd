@@ -2,6 +2,10 @@
 
 - We can look at the Seurat objects we've loaded from SeuratData:
 
+```{r, include=FALSE}
+load('cache.RData')
+````
+
 ```{r}
 library('pbmc3k.SeuratData')
 library('ifnb.SeuratData')
@@ -27,3 +31,8 @@ pbmc3k@meta.data
 ifnb@assays
 ifnb@meta.data
 ```
+
+
+```{r, include=FALSE}
+save.image(file='cache.RData')
+````

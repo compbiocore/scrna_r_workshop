@@ -2,8 +2,41 @@
 
  - We are using the `SeuratData` package for some test data. 
  - Use `AvailableData()` to see what datasets are available
-```{r}
+
+```{r, include=FALSE}
+load('cache.RData')
+library(RColorBrewer)
+library(Seurat)
+library(patchwork)
+library(ggplot2)
+library(dplyr)
+library(hdf5r)
+library(stringr)
+library(biomaRt)
+library(kableExtra)
+library(knitr)
+library(pdftools)
+library(viridis)
+library(openxlsx)
+library(SeuratDisk)
 library(SeuratData)
+library(ComplexHeatmap)
+library(plotly)
+library(iDEA)
+library(fgsea)
+library(clusterpval)
+library(msigdbr)
+library('pbmc3k.SeuratData')
+library('cbmc.SeuratData')
+library('ifnb.SeuratData')
+library('panc8.SeuratData')
+data("pbmc3k")
+data("cbmc")
+data("ifnb")
+data("panc8")
+````
+
+```{r}
 AvailableData()
 ```
 
@@ -14,3 +47,7 @@ AvailableData()
 
 - You could also use you could also use `Read10X` and give a path to a folder that contains your matrix, features, and barcode tsv files.
 - After you have read in the 10X data, use it as the input to the `CreateSeuratObject` function.
+
+```{r, include=FALSE}
+save.image(file='cache.RData')
+````

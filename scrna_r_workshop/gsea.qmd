@@ -1,4 +1,36 @@
 # Gene set enrichment analysis (GSEA)
+```{r, include=FALSE}
+load('cache.RData')
+library(RColorBrewer)
+library(Seurat)
+library(patchwork)
+library(ggplot2)
+library(dplyr)
+library(hdf5r)
+library(stringr)
+library(biomaRt)
+library(kableExtra)
+library(knitr)
+library(pdftools)
+library(viridis)
+library(openxlsx)
+library(SeuratDisk)
+library(SeuratData)
+library(ComplexHeatmap)
+library(plotly)
+library(iDEA)
+library(fgsea)
+library(clusterpval)
+library(msigdbr)
+library('pbmc3k.SeuratData')
+library('cbmc.SeuratData')
+library('ifnb.SeuratData')
+library('panc8.SeuratData')
+data("pbmc3k")
+data("cbmc")
+data("ifnb")
+data("panc8")
+```
 
 GSEA is a more in-depth method that can capture coordinated changes in pathways even if the differences are small or some of the genes are not differentially expressed. We won't get into the algorithm here, but the three important results from the output to keep in mind are:
 
@@ -17,3 +49,6 @@ notes for brainstorming
     Show how to make ranked list with log2FC and -sign(log2FC)xlog10(pval) for GSEA with fgsea and compare
 
 
+```{r, include=FALSE}
+save.image(file='cache.RData')
+```

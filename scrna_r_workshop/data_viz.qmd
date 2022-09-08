@@ -1,4 +1,25 @@
 # Data Visualization
+```{r, include=FALSE}
+load('cache.RData')
+library(RColorBrewer)
+library(Seurat)
+library(patchwork)
+library(ggplot2)
+library(dplyr)
+library(hdf5r)
+library(stringr)
+library(biomaRt)
+library(viridis)
+library(SeuratDisk)
+library(SeuratData)
+library(msigdbr)
+library('pbmc3k.SeuratData')
+library('cbmc.SeuratData')
+library('ifnb.SeuratData')
+data("pbmc3k")
+data("cbmc")
+data("ifnb")
+```
 
 - Seurat comes with many functions for visualizing your data. Conveniently, you can use `ggplot`-like syntax to tweak your figures as needed. 
 - First, lets switch to the `SCT` assay for our visualization.
@@ -85,11 +106,16 @@ Seurat also makes heatmaps with `DoHeatmap`, which also uses the "scale.data" sl
 ```{r}
 Idents(all_data_integrated) <-  'orig.ident'
 DefaultAssay(all_data_integrated) <-  'RNA'
-DoHeatmap(all_data_integrated, features = rownames(ctl_vs_stim)[1:5])
+DoHeatmap(all_data_integrated, features = rownames(ctl_vs_stim)[1:5], slot = 'RNA', assay = 'data')
 ```
 
 We can use custom colors again if we'd like:
 ```{r}
-DoHeatmap(pbmc1k, features = all_cluster_markers$gene[1:3]) & 
+DoHeatmap(all_data_integrated, features = rownames(ctl_vs_stim)[1:5], slot = 'RNA', assay = 'data') & 
    scale_fill_gradient2( low = c('#2c7bb6', '#abd9e9'), mid = '#ffffbf', high = c('#fdae61', '#d7191c')) 
+```
+
+
+```{r, include=FALSE}
+save.image(file='cache.RData')
 ```

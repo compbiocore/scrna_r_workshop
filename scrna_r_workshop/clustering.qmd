@@ -1,5 +1,25 @@
 # Clustering
-
+```{r, include=FALSE}
+load('cache.RData')
+library(RColorBrewer)
+library(Seurat)
+library(patchwork)
+library(ggplot2)
+library(dplyr)
+library(hdf5r)
+library(stringr)
+library(biomaRt)
+library(viridis)
+library(SeuratDisk)
+library(SeuratData)
+library(msigdbr)
+library('pbmc3k.SeuratData')
+library('cbmc.SeuratData')
+library('ifnb.SeuratData')
+data("pbmc3k")
+data("cbmc")
+data("ifnb")
+```
 - Then we can re-merge the data using `merge.data = TRUE` so that we also merge the data slots instead of just merging the counts (which requires re-normalization). This is recommended if the same normalization approach was applied to all objects.
 ```{r}
 all_data_merged <- merge(x = all_data_list$pbmc3k, y = c(all_data_list$IMMUNE_CTRL, all_data_list$IMMUNE_STIM), merge.data = TRUE)
@@ -7,10 +27,10 @@ all_data_merged <- merge(x = all_data_list$pbmc3k, y = c(all_data_list$IMMUNE_CT
 
 - Then run PCA
 ```{r}
-all_data_merged <- RunPCA(all_data_merged)
+#all_data_merged <- RunPCA(all_data_merged)
 ```
 
-- You are getting an error because after the merge, the variable feature slot gets wiped since there could be different variable features in each original object. 
+- If you run this cose, you will get an error. This is because after the merge, the variable feature slot gets wiped since there could be different variable features in each original object. 
 - The default for `RunPCA` is to use those features and since it's empty, you get an error. 
 - You can either set the variable features of the merged SCT assay yourself (to something like the intersection or union of the individual object's variable features) or provide this vector of features to RunPCA itself (https://github.com/satijalab/seurat/issues/2852).
 - We will run `SelectIntegrationFeatures` on the list of Seurat objects before merge and then assign those as the `VariableFeatures`
@@ -38,4 +58,7 @@ all_data_merged <- FindNeighbors(all_data_merged, dims = 1:10)
 - Let's run `FindClusters` with the default parameters:
 ```{r}
 all_data_merged <- FindClusters(all_data_merged)
+```
+```{r, include=FALSE}
+save.image(file='cache.RData')
 ```

@@ -1,5 +1,36 @@
 # iDEA
-
+```{r, include=FALSE}
+load('cache.RData')
+library(RColorBrewer)
+library(Seurat)
+library(patchwork)
+library(ggplot2)
+library(dplyr)
+library(hdf5r)
+library(stringr)
+library(biomaRt)
+library(kableExtra)
+library(knitr)
+library(pdftools)
+library(viridis)
+library(openxlsx)
+library(SeuratDisk)
+library(SeuratData)
+library(ComplexHeatmap)
+library(plotly)
+library(iDEA)
+library(fgsea)
+library(clusterpval)
+library(msigdbr)
+library('pbmc3k.SeuratData')
+library('cbmc.SeuratData')
+library('ifnb.SeuratData')
+library('panc8.SeuratData')
+data("pbmc3k")
+data("cbmc")
+data("ifnb")
+data("panc8")
+```
 iDEA (https://xzhoulab.github.io/iDEA/) is a more recent method which performs joint estimation of differential expression and gene set enrichment. It assumes you have already run differential expression analysis and expects an input of gene-level summary stats -- the fold changes and their variances. Here we can calculate that information from our Seurat output:
 
 ```{r}
@@ -69,4 +100,9 @@ pip = unlist(idea@de[["GO_REGULATION_OF_CANONICAL_WNT_SIGNALING_PATHWAY"]]$pip)
 ### head the posterior inclusion probability for each gene
 head(pip)
 idea@de$REACTOME_INTERFERON_SIGNALING$beta idea@de$REACTOME_INTERFERON_SIGNALING$pip
+```
+
+
+```{r, include=FALSE}
+save.image(file='cache.RData')
 ```

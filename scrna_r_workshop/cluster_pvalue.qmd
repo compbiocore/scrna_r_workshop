@@ -1,5 +1,36 @@
 # Controlling for Type I error in estimated clusters with clusterpval
-
+```{r, include=FALSE}
+load('cache.RData')
+library(RColorBrewer)
+library(Seurat)
+library(patchwork)
+library(ggplot2)
+library(dplyr)
+library(hdf5r)
+library(stringr)
+library(biomaRt)
+library(kableExtra)
+library(knitr)
+library(pdftools)
+library(viridis)
+library(openxlsx)
+library(SeuratDisk)
+library(SeuratData)
+library(ComplexHeatmap)
+library(plotly)
+library(iDEA)
+library(fgsea)
+library(clusterpval)
+library(msigdbr)
+library('pbmc3k.SeuratData')
+library('cbmc.SeuratData')
+library('ifnb.SeuratData')
+library('panc8.SeuratData')
+data("pbmc3k")
+data("cbmc")
+data("ifnb")
+data("panc8")
+```
 The first part of this workshop ran through how to use Seurat to cluster the cells. The first step is running a PCA (`RunPCA`), which then gets used as the input for the `FindNeighbors` function. `FindNeighbors` constructs a KNN graph based on the euclidean distance in PCA space and refines the edge weights between any two cells based on the shared overlap in their local neighborhoods (Jaccard similarity). The next step is `FindClusters`, where we apply the Louvain algorithm to iteratively group cells together, with the goal of optimizing the standard modularity function. 
 
 After we have grouped the cells, we might want to ask questions about the clusters -- for example, are there differentially expressed genes across clusters? **This gets us into 'double-dipping' territory.** We have clustered the cells based on their gene expression and then want to ask questions about which genes are differentially expressed across those groups. We are generating hypotheses based on the data and then testing the hypotheses on the same data. This can lead to an uncontrolled type I error rate when using classical hypothesis tests like the Wilcoxon test. 
@@ -52,3 +83,8 @@ clusters: the estimated cluster assignments
 
 We are getting back NaN for the pvalues, likely because we are using only 1000 draws because we have limited time/oscar resources for the workshop.
 The authors are working on an implementation for expression analysis what would allow this method to perform differential expression p-value correction, but it is not functional as yet (https://github.com/lucylgao/clusterpval/issues/3).
+
+
+```{r, include=FALSE}
+save.image(file='cache.RData')
+```
