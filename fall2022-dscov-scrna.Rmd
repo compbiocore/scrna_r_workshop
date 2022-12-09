@@ -3,31 +3,31 @@
 
 Fill in the fields as follows:
 
-`Account`: leave blank
-`Partition`: leave blank
-`Number of hours`: 2
-`Num Cores`: 16
-`Memory`: 30
-`Singularity Container Path`: /gpfs/data/shared/databases/workshops/dscov/scrna_r_workshop/metadata/dscov_sct.sif
-`Package install Path`: leave blank
-`Path for R Executable`: ~
-`R Module`: leave blank
-`Additional Data Path`: /gpfs/data/shared/databases/workshops/dscov/scrna_r_workshop
+`Account`: leave blank     
+`Partition`: leave blank       
+`Number of hours`: 2      
+`Num Cores`: 16       
+`Memory`: 30      
+`Singularity Container Path`: /gpfs/data/shared/databases/workshops/dscov/scrna_r_workshop/metadata/dscov_sct.sif      
+`Package install Path`: leave blank      
+`Path for R Executable`: ~     
+`R Module`: leave blank     
+`Additional Data Path`: /gpfs/data/shared/databases/workshops/dscov/scrna_r_workshop     
 
-Once your job starts, click the button to connect to session.
-At the top of the screen you'll see a menu bar that starts with 'file', click on 'file' and 'open file'.
-It will ask for a File name -- paste this into the box: `/gpfs/data/shared/databases/workshops/dscov/scrna_r_workshop/fall2022-dscov-scrna.Rmd`
+Once your job starts, click the button to connect to session.     
+At the top of the screen you'll see a menu bar that starts with 'file', click on 'file' and 'open file'.     
+It will ask for a File name -- paste this into the box:      `/gpfs/data/shared/databases/workshops/dscov/scrna_r_workshop/fall2022-dscov-scrna.Rmd`      
 
 # Introduction to scRNA-seq
 
 **What we will cover**
-- Bulk vs single cell RNAseq
-- Importing your data
-- Working with Seurat objects
-- Data QC and filtering
-- Merging and integrating data
-- SCTransform normalization
-
+- Bulk vs single cell RNAseq     
+- Working with Seurat objects     
+- Data QC and filtering      
+- Merging and integrating data       
+- SCTransform normalization      
+- Seurat log normalization        
+      
 Much of this notebook is adapted from the Seurat vignettes https://satijalab.org/seurat and GitHub repository https://github.com/satijalab/seurat
 
 ### What is RNAseq?
@@ -67,17 +67,20 @@ knitr::include_graphics('src/bulk_vs_single.png')
 ```{r}
 knitr::include_graphics('src/10x_flow.png')
 ```
-
+        
 - 10x sequencing encapsulates a cell, reagents, and a bead w/ primer in an oil droplet (aka GEM or Gel Bead-in EMulsion).    
 - If you have a situation where one droplet has two cells, this is a 'doublet', you can also have empty droplets where there's no cell encapsulated.
 
 ```{r}
 knitr::include_graphics('src/10x_bead.png')
 ```
+        
 - After encapsulation of cells, beads, and reagents in the oil droplets, the bead is dissolved and releases primers. 
 - The poly (dT) primers are used for generating the gene expression libraries. 
-- The capture sequence primers are shown in a lighter shading because they are only used in situations where you'd like to add an extra channel of information to your experiment by using feature barcoding (cell-surface protein characterization, multiplexing, etc.).
-
+- The 'barcode' is a cell barcode.
+- The 'UMI' is a unique molecular identifier for each RNA molecule.
+- The capture sequence primers are shown in a lighter shading because they are only used in situations where you'd like to add an extra channel of information to your experiment by using feature barcoding (cell-surface protein characterization, multiplexing, etc.).     
+      
 ```{r}
 knitr::include_graphics('src/single_vs_double.png')
 ```
@@ -533,7 +536,8 @@ ggplot(log.df, aes(log.umi, expr)) +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
   scale_x_continuous(labels = function(x) {format(x, digits=2)})
 ```
-You can see that the log transformation does not properly correct when genes are lowly expressed.
+            
+You can see that the log transformation does not properly correct when genes are lowly expressed.                  
 ```{r, message=FALSE}
 theme_set(theme_classic(base_size=9))
 
@@ -553,12 +557,13 @@ ggplot(sct.df, aes(log.umi, expr)) +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
   scale_x_continuous(labels = function(x) {format(x, digits=2)})
 ```
-But SCTransform does a much better job.
-
-To recap:
-- SCTransform is great, but proceed with caution if your data doesn't fit the assumptions it makes.
-- An outline of SCTransform normalization: `SCTransfrom` -> `SelectIntegrationFeatures` -> `PrepSCTIntegration` -> `FindIntegrationAnchors` -> `IntegrateData` -> dim reduction and clustering.
-- For the Seurat-based log normalization: `NormalizeData` -> `FindVariableFeatures` -> `SelectIntegrationFeatures` -> `FindIntegrationAnchors` -> `IntegrateData` -> `ScaleData` -> dim reduction and clustering.
-
+          
+But SCTransform does a much better job.         
+         
+To recap:        
+- SCTransform is great, but proceed with caution if your data doesn't fit the assumptions it makes.       
+- An outline of SCTransform normalization: `SCTransfrom` -> `SelectIntegrationFeatures` -> `PrepSCTIntegration` -> `FindIntegrationAnchors` -> `IntegrateData` -> dim reduction and clustering.         
+- For the Seurat-based log normalization: `NormalizeData` -> `FindVariableFeatures` -> `SelectIntegrationFeatures` -> `FindIntegrationAnchors` -> `IntegrateData` -> `ScaleData` -> dim reduction and clustering.         
+           
 Thank you!
 
