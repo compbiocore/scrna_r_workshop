@@ -1,14 +1,16 @@
 # Introduction to scRNA-seq
 
 **What we will cover**
-- Bulk vs single cell RNAseq
-- Importing your data
-- Working with Seurat objects
-- Data QC and filtering
-- Merging and integrating data
-- SCTransform normalization
+- How does scRNA-seq differ from bulk RNA-seq?
+- scRNAseq technologies
+- Parallelization options for Seurat and other packages
+- Seurat objects and importing data
+- Data merging, QC, and filtering
+- SCTransform normalization, clustering, dimension reduction
+- Data integration
 - Differential expression testing
 - Data visualization
+- Classifying cell types with a reference atlas with TransferAnchors from Seurat    
 
 Much of this notebook is adapted from the Seurat vignettes https://satijalab.org/seurat and GitHub repository https://github.com/satijalab/seurat
 
@@ -28,7 +30,7 @@ Much of this notebook is adapted from the Seurat vignettes https://satijalab.org
     - Dying cells - you will lose some cells because they are dead or dying, you can also filter these out during sample QC.
     - You also should be cautious when thinking about your sample sizes. For example, you may be sequencing thousands of cells but if they all come from the same mouse you lose the ability to generalize your findings.
    
-### scRNA-seq technologies
+### scRNAseq technologies
 - Although 10X genomics is probably the most popular technology for scRNA-seq, there are other flavors (see PMID 30472192 and PMID 28212749).   
 
 ![sc flow](src/10x_flow.png)
@@ -80,7 +82,62 @@ The actual sequencing looks like the above image -- Truseq Read 1 uses bottom st
 
 - https://teichlab.github.io/scg_lib_structs/ is an excellent resource for information about the resulting library structures for 10x libraries (and other single cell technologies like Drop-seq or SMART-seq) and was our resource for most of this section.
 
-### Seurat objects
+### Parallelization options for Seurat and other packages
+
+Let's get started. First, we'll need to set the `.libPaths()` since we are using a Singularity container.
+
+```{r "set lib paths"}
+.libPaths(c('/usr/local/lib/R/site-library', '/usr/local/lib/R/library'))
+```
+
+All of the methods we are discussing here involve computationally heavy methods, and as such also take advantage of parallelization where they can. Often in their documentation you will find how to use multiple cores when calling a function, usually involving a provided argument or involving a package called `future`. For example, Seurat has a [vignette on parallelization](https://satijalab.org/seurat/articles/future_vignette.html) with `future`. We will follow it here:
+
+```{r}
+library(future)
+# check the current active plan
+plan()
+```
+
+We set workers=8 because we've requested 8 cores. Additionally, we set `multisession` instead of `multiprocess` despite what the vignette says, because `multiprocess` is actually deprecated in `future` and we should be explicitly specifying `multisession` or `multicore` instead. Getting into the difference is out of scope of this workshop, but you can [read more](https://cran.r-project.org/web/packages/future/vignettes/future-1-overview.html) on future yourself if interested.
+
+```{r}
+# change the current plan to access parallelization
+plan("multisession", workers = 8)
+plan()
+```
+We'll also set a seed at the start of the notebook so that we can reproduce our results if we decide to re-run this notebook at some future date. We also set `future.globals.maxSize`, see this link for discussion about why we do that (basically we might be exceeding the allowed global variable size so we make that default bigger) https://satijalab.org/seurat/archive/v3.0/future_vignette.html
+
+```{r "setup"}
+set.seed(61)
+options(future.globals.maxSize = 4000 * 1024^5)
+```
+
+- Then we load all the libraries we need:
+```{r "setup"}
+
+library(RColorBrewer)
+library(Seurat)
+library(patchwork)
+library(ggplot2)
+library(dplyr)
+library(hdf5r)
+library(stringr)
+library(biomaRt)
+library(viridis)
+library(SeuratDisk)
+library(SeuratData)
+library(msigdbr)
+library('pbmc3k.SeuratData')
+library('cbmc.SeuratData')
+library('ifnb.SeuratData')
+data("pbmc3k")
+data("cbmc")
+data("ifnb")
+```
+
+
+
+### Seurat objects and importing data
 - This workshop focuses on using Seurat objects to structure your scRNA-seq data (https://github.com/satijalab/seurat/wiki/Seurat).     
 
 ![seurat object](src/seurat_object.png){height=600px width=300px} 
@@ -110,64 +167,17 @@ The actual sequencing looks like the above image -- Truseq Read 1 uses bottom st
     
 **Much of this notebook is taken from the various Seurat vignettes: https://satijalab.org/seurat/articles/get_started.html**
 
-
-Let's get started. First, we'll need to set the `.libPaths()` since we are using a Singularity container.
-
-```{r "set lib paths"}
-.libPaths(c('/usr/local/lib/R/site-library', '/usr/local/lib/R/library'))
-```
-
-- We'll also set a seed at the start of the notebook so that we can reproduce our results if we decide to re-run this notebook at some future date.   
-- We also set `future.globals.maxSize`, see this link for discussion about why we do that (basically we might be exceeding the allowed global variable size so we make them bigger) https://satijalab.org/seurat/archive/v3.0/future_vignette.html
-
-```{r "setup"}
-set.seed(61)
-options(future.globals.maxSize = 4000 * 1024^5)
-plan("multiprocess", workers = 4)
-```
-
-- Then we load all the libraries we need:
-```{r "setup"}
-
-library(RColorBrewer)
-library(Seurat)
-library(patchwork)
-library(ggplot2)
-library(dplyr)
-library(hdf5r)
-library(stringr)
-library(biomaRt)
-library(viridis)
-library(SeuratDisk)
-library(SeuratData)
-library(msigdbr)
-library('pbmc3k.SeuratData')
-library('cbmc.SeuratData')
-library('ifnb.SeuratData')
-data("pbmc3k")
-data("cbmc")
-data("ifnb")
-```
-
-
-### Importing data
-
  - We are using the `SeuratData` package for some test data. 
  - Use `AvailableData()` to see what datasets are available
 ```{r}
 AvailableData()
 ```
 
-- We've already installed a few of the test datasets in this container, you would usually be able to install more datasets using `InstallData` but won't have permissions to install in this container. 
-- What if you want to run Seurat using your own data? We can use the function `Read10X_h5` to import some h5 files.    
-
-"Hierarchical Data Format (HDF5 or H5). H5 is a binary format that can compress and access data much more efficiently than text formats such as MEX, which is especially useful when dealing with large datasets." https://support.10xgenomics.com/single-cell-gene-expression/software/pipelines/latest/advanced/h5_matrices.   
-
+- We've already installed a few of the test data sets in this container, you would usually be able to install more datasets using `InstallData` but won't have permissions to install in this container. 
+- If you are using Seurat with your own data, you could use the functions `Read10X` or `Read10X_h5` to import data.
+- `Read10X_h5` works with H5 files -- "Hierarchical Data Format (HDF5 or H5). H5 is a binary format that can compress and access data much more efficiently than text formats such as MEX, which is especially useful when dealing with large datasets." https://support.10xgenomics.com/single-cell-gene-expression/software/pipelines/latest/advanced/h5_matrices.   
 - You could also use you could also use `Read10X` and give a path to a folder that contains your matrix, features, and barcode tsv files.
 - After you have read in the 10X data, use it as the input to the `CreateSeuratObject` function.
-
-### Working with Seurat objects
-
 - We can look at the Seurat objects we've loaded from SeuratData:
 
 ```{r}
@@ -183,7 +193,7 @@ pbmc3k
 ?ifnb
 ```
 
-What assays and meta.data are available?
+What assays and meta.data are available? 
 ```{r}
 pbmc3k@assays
 pbmc3k@meta.data
@@ -192,7 +202,7 @@ ifnb@assays
 ifnb@meta.data
 ```
 
-### Merging data
+### Data merging, QC, and filtering
 
 - Let's merge the datasets to make our QC and filtering a bit smoother (https://satijalab.org/seurat/articles/merge_vignette.html)
 - `merge()` merges the raw count matrices of two Seurat objects and creates a new Seurat object with the resulting combined raw count matrix. 
@@ -203,8 +213,6 @@ ifnb@meta.data
 all_data <- merge(x = ifnb, y = pbmc3k, add.cell.ids = c("ifnb", "pbmc3k"), project = 'pbmc')
 unique(all_data@meta.data$orig.ident)
 ```
-
-### Data QC and filtering
 
 - We care about the percentage of reads that map to the mitochondrial genome because high mitochondrial reads in a cell can indicate that the cells are low-quality or dying cells
 - The mitochondrial QC metrics are calcualted with the `PercentageFeatureSet()` function, which calculates the percentage of counts originating from a set of features
@@ -273,8 +281,7 @@ all_data_split <- SplitObject(all_data_sub, split.by = 'orig.ident')
 ### SCTransform normalization, clustering, dimension reduction
 
 Theory
-
-The theory behind SCTransform (https://genomebiology.biomedcentral.com/articles/10.1186/s13059-019-1874-1) is very similar to the generalized linear models (GLMs) used in bulkRNAseq analysis packages like DESeq2 and edgeR. In DESeq2 a negative binomial model is fitted to the counts and the mean and dispersion (roughly speaking how variable the observed count will be from the mean count) estimates from that model are used as the test statistics for comparison between groups. The same idea applies with SCTransform, with an additional aspect where SCTransform pools information across genes with similar abundances in order to address the higher sparsity of single cell data. 
+scRNAseq data is normalized so that we can mitigate technical effects while preserving the biological signal in the data -- we should be able to find the biological signal in cells irrespective of how deeply we sequenced the cell. The theory behind SCTransform (https://genomebiology.biomedcentral.com/articles/10.1186/s13059-019-1874-1) is very similar to the generalized linear models (GLMs) used in bulkRNAseq analysis packages like DESeq2 and edgeR. In DESeq2 a negative binomial model is fitted to the counts and the mean and dispersion (roughly speaking how variable the observed count will be from the mean count) estimates from that model are used as the test statistics for comparison between groups. The same idea applies with SCTransform, with an additional aspect where SCTransform pools information across genes with similar abundances in order to address the higher sparsity of single cell data. 
 
 Below is a side-by-side comparison of sctransform with NormalizeData, FindVariableFeatures and ScaleData on the PBMC3k data:
 ![sct](src/sctransform_vs_regular.png)
@@ -284,22 +291,31 @@ We also like this figure from the SCTransform paper, which shows how SCTransform
 - We can run SCTransform on the data list you just made.
 - You might get see a warning that says 'iteration limit reached' when you run this.
 - This warning can be ignored (https://github.com/satijalab/sctransform/issues/25) because the parameter estimation generating this warning is regularized later anyway. 
+- You can use the `vars.to.regress` argument to regress out nuisance variables (like cell cycle or batch effects)
+- When you run SCTransform you need to specify an additional parameter otherwise only the variable genes will be included in the scale data slot. Add `return.only.var.genes = FALSE` to the function call and that should solve the issue (https://github.com/satijalab/seurat/issues/3553).
 
 ```{r "SCTransform"}
-all_data_list <- lapply(all_data_split, function(x) {
-    x <- SCTransform(x,verbose=FALSE,return.only.var.genes = FALSE)}) # if you run this you might get several iteration limit reached issues
-```
-- When you run SCTransform you need to specify an additional parameter otherwise only the variable genes will be included in the scale data slot. Add return.only.var.genes = FALSE to the function call and that should solve the issue (https://github.com/satijalab/seurat/issues/3553).
+#all_data_list <- lapply(all_data_split, function(x) {
+#    x <- SCTransform(x,verbose=FALSE,return.only.var.genes = FALSE)}) 
+#saveRDS(all_data_list, file="/gpfs/data/shared/databases/workshops/bootcamp_2023/scrna_r_workshop/data/all_data_list.Rds")
 
+all_data_list <- readRDS("/gpfs/data/shared/databases/workshops/bootcamp_2023/scrna_r_workshop/data/all_data_list.Rds")
+
+
+```
 
 - Then we can re-merge the data using `merge.data = TRUE` so that we also merge the data slots instead of just merging the counts (which requires re-normalization). This is recommended if the same normalization approach was applied to all objects.
 ```{r}
-all_data_merged <- merge(x = all_data_list$pbmc3k, y = c(all_data_list$IMMUNE_CTRL, all_data_list$IMMUNE_STIM), merge.data = TRUE)
+#all_data_merged <- merge(x = all_data_list$pbmc3k, y = c(all_data_list$IMMUNE_CTRL, all_data_list$IMMUNE_STIM), merge.data = TRUE)
+#saveRDS(all_data_merged, file="/gpfs/data/shared/databases/workshops/bootcamp_2023/scrna_r_workshop/data/all_data_merged.Rds")
+
+all_data_merged  <- readRDS("/gpfs/data/shared/databases/workshops/bootcamp_2023/scrna_r_workshop/data/all_data_merged.Rds")
+
 ```
 
 - Then run PCA
 ```{r}
-all_data_merged <- RunPCA(all_data_merged)
+#all_data_merged <- RunPCA(all_data_merged)
 ```
 
 - You are getting an error because after the merge, the variable feature slot gets wiped since there could be different variable features in each original object. 
@@ -319,24 +335,30 @@ ElbowPlot(all_data_merged)
 ```
 
 - Based on this plot, we get diminishing information returned once we get above ~10 PCs.
-- Next, construct a KNN graph based on the euclidean distance in PCA space, and refine the edge weights between any two cells based on the shared overlap in their local neighborhoods (Jaccard similarity). 
-- This step is performed using the FindNeighbors() function, and takes as input the previously defined dimensionality of the dataset (first 10 PCs).
+- Next, `FindNeighbors`, which will construct a KNN graph based on the euclidean distance in PCA space, and refine the edge weights between any two cells based on the shared overlap in their local neighborhoods (Jaccard similarity). 
+- The input is the previously defined dimensionality of the dataset (first 10 PCs).
+
 ```{r}
-all_data_merged <- FindNeighbors(all_data_merged, dims = 1:10)
+#all_data_merged <- FindNeighbors(all_data_merged, dims = 1:10)
+#saveRDS(all_data_merged, file="/gpfs/data/shared/databases/workshops/bootcamp_2023/scrna_r_workshop/data/all_data_merged_FindNeighbors.Rds")
+all_data_merged <- readRDS("/gpfs/data/shared/databases/workshops/bootcamp_2023/scrna_r_workshop/data/all_data_merged_FindNeighbors.Rds")
+
 ```
 
 - To cluster the cells, we run `FindClusters` to apply the Louvain algorithm to iteratively group cells together, with the goal of optimizing the standard modularity function. 
 - `FindClusters` takes a `resolution` argument (defaults to a value of 0.8), which sets the granularity of the clustering, setting this parameter between 0.4-1.2 typically returns good results for single-cell datasets of around 3K cells but the resolution might increase for larger datasets.
 - Let's run `FindClusters` with the default parameters:
 ```{r}
-all_data_merged <- FindClusters(all_data_merged)
+#all_data_merged <- FindClusters(all_data_merged)
+#saveRDS(all_data_merged, file="/gpfs/data/shared/databases/workshops/bootcamp_2023/scrna_r_workshop/data/all_data_merged_FindClusters.Rds")
+all_data_merged <- readRDS("/gpfs/data/shared/databases/workshops/bootcamp_2023/scrna_r_workshop/data/all_data_merged_FindClusters.Rds")
+
 ```
 
 - Seurat offers several non-linear dimensional reduction technique to visualize and explore these datasets (umap, tsne). 
 - The goal of these algorithms is to learn the underlying manifold of the data in order to place similar cells together in low-dimensional space. 
 - As input to the UMAP and tSNE, we suggest using the same PCs as input to the clustering analysis. 
 - We recommend using FIt-SNE to make things faster. It is based on Kluger Lab code found here: https://github.com/KlugerLab/FIt-SNE 
-
 
 ```{r}
 all_data_merged <- RunUMAP(all_data_merged, dims = 1:10)
@@ -364,26 +386,40 @@ Here, we will show how to integrate SCTransform-normalized data.
 The first step is `SelectIntegrationFeatures()`, which ranks features by the number of datasets they are deemed variable in, breaking ties by the median variable feature rank across datasets, and returns the top scoring features by this ranking.
 
 ```{r}
-integration_features <- SelectIntegrationFeatures(all_data_list)
+#integration_features <- SelectIntegrationFeatures(all_data_list)
+#saveRDS(integration_features, file="/gpfs/data/shared/databases/workshops/bootcamp_2023/scrna_r_workshop/data/all_data_merged_integration_features.Rds")
+integration_features <- ("/gpfs/data/shared/databases/workshops/bootcamp_2023/scrna_r_workshop/data/all_data_merged_integration_features.Rds")
+
 ```
 
 Next, we `PrepSCTIntegration`, which takes a list of objects that have been normalized with SCTransform and performs the following steps:
-- If anchor.features is a numeric value, calls `SelectIntegrationFeatures` to determine the features to use in the downstream integration procedure.
-- Ensures that the sctransform residuals for the features specified to anchor.features are present in each object in the list. This is necessary because the default behavior of SCTransform is to only store the residuals for the features determined to be variable. Residuals are recomputed for missing features using the stored model parameters via the GetResidual function.
-- Subsets the scale.data slot to only contain the residuals for anchor.features for efficiency in downstream processing.
+- If `anchor.features` is a numeric value, calls `SelectIntegrationFeatures` to determine the features to use in the downstream integration procedure.
+- Ensures that the `SCTransform` residuals for the features specified to `anchor.features` are present in each object in the list. This is necessary because the default behavior of `SCTransform `is to only store the residuals for the features determined to be variable. Residuals are recomputed for missing features using the stored model parameters via the `GetResidual` function.
+- Subsets the `scale.data` slot to only contain the residuals for `anchor.features` for efficiency in downstream processing.
 
 ```{r}
-all_data_list <- PrepSCTIntegration(object.list = all_data_list, anchor.features = integration_features)
+#all_data_list <- PrepSCTIntegration(object.list = all_data_list, anchor.features = integration_features)
+#saveRDS(all_data_list, file="/gpfs/data/shared/databases/workshops/bootcamp_2023/scrna_r_workshop/data/all_data_merged_PrepSCTIntegration.Rds")
+all_data_list <- readRDS("/gpfs/data/shared/databases/workshops/bootcamp_2023/scrna_r_workshop/data/all_data_merged_PrepSCTIntegration.Rds")
+
 ```
 
-Find a set of anchors between a list of Seurat objects, they can later be used to integrate the objects using the IntegrateData function.
+Find a set of anchors between a list of Seurat objects, they can later be used to integrate the objects using the `IntegrateData` function.
 ```{r}
-anchors <- FindIntegrationAnchors(object.list = all_data_list, normalization.method = "SCT", anchor.features = integration_features)
+#anchors <- FindIntegrationAnchors(object.list = all_data_list, normalization.method = "SCT", anchor.features = integration_features)
+#saveRDS(anchors, file="/gpfs/data/shared/databases/workshops/bootcamp_2023/scrna_r_workshop/data/all_data_merged_anchors.Rds")
+
+anchors <- readRDS("/gpfs/data/shared/databases/workshops/bootcamp_2023/scrna_r_workshop/data/all_data_merged_anchors.Rds")
+
+
 ```
 
 The last step is integrating the data:
 ```{r}
-all_data_integrated <- IntegrateData(anchorset = anchors, normalization.method = "SCT")
+#all_data_integrated <- IntegrateData(anchorset = anchors, normalization.method = "SCT")
+#saveRDS(all_data_integrated, file="/gpfs/data/shared/databases/workshops/bootcamp_2023/scrna_r_workshop/data/all_data_integrateds.Rds")
+all_data_integrated <- readRDS("/gpfs/data/shared/databases/workshops/bootcamp_2023/scrna_r_workshop/data/all_data_integrateds.Rds")
+
 ```
 
 Then we can run PCA on the integrated object:
@@ -399,8 +435,13 @@ all_data_integrated <- RunTSNE(all_data_integrated, tsne.method = "FIt-SNE", see
 ```
 Find neighbors and clusters
 ```{r}
-all_data_integrated <- FindNeighbors(all_data_integrated, dims = 1:10)
-all_data_integrated <- FindClusters(all_data_integrated)
+#all_data_integrated <- FindNeighbors(all_data_integrated, dims = 1:10)
+#saveRDS(all_data_integrated, file="/gpfs/data/shared/databases/workshops/bootcamp_2023/scrna_r_workshop/data/all_data_integrateds_FindNeighbors.Rds")
+
+#all_data_integrated <- FindClusters(all_data_integrated)
+#saveRDS(all_data_integrated, file="/gpfs/data/shared/databases/workshops/bootcamp_2023/scrna_r_workshop/data/all_data_integrateds_FindClusters.Rds")
+
+all_data_integrated <- readRDS("/gpfs/data/shared/databases/workshops/bootcamp_2023/scrna_r_workshop/data/all_data_integrateds_FindClusters.Rds")
 ```
 
 ```{r}
@@ -408,11 +449,10 @@ DimPlot(all_data_integrated, reduction='tsne', group.by = 'orig.ident')
 DimPlot(all_data_integrated, reduction='umap', group.by = 'orig.ident')
 ```
 
-Then we can compare the tsne and umap plots of the merged and integrated datasets. This helps illustrate why we integrate!
+Then we can compare the tsne and umap plots of the merged and integrated datasets. This helps illustrate why we integrate.
 
 ```{r}
 DimPlot(all_data_merged, reduction='tsne', group.by = 'orig.ident') + ggtitle("Merged") | DimPlot(all_data_integrated, reduction='tsne', group.by = 'orig.ident') + ggtitle("Integrated")
-
 DimPlot(all_data_merged, reduction='umap', group.by = 'orig.ident') + ggtitle("Merged") | DimPlot(all_data_integrated, reduction='umap', group.by = 'orig.ident') + ggtitle("Integrated")
 ```
 
@@ -539,19 +579,125 @@ DotPlot(all_data_integrated, features = rownames(ctl_vs_stim)[1:5]) &
     scale_color_viridis(option = "magma", direction = -1) 
 ```
 
-Seurat also makes heatmaps with `DoHeatmap`, which also uses the "scale.data" slot. We'll switch to the `RNA` slot.
+Seurat also makes heatmaps with `DoHeatmap`, which also uses the "scale.data" slot.
 
 ```{r}
 Idents(all_data_integrated) <-  'orig.ident'
-DefaultAssay(all_data_integrated) <-  'RNA'
+DefaultAssay(all_data_integrated) <-  'SCT'
 DoHeatmap(all_data_integrated, features = rownames(ctl_vs_stim)[1:5])
 ```
 
 We can use custom colors again if we'd like:
 ```{r}
-DoHeatmap(pbmc1k, features = all_cluster_markers$gene[1:3]) & 
+DoHeatmap(all_data_integrated, features = rownames(ctl_vs_stim)[1:5]) & 
    scale_fill_gradient2( low = c('#2c7bb6', '#abd9e9'), mid = '#ffffbf', high = c('#fdae61', '#d7191c')) 
+
 ```
+
+### Classifying cell types with a reference atlas with TransferAnchors from Seurat 
+
+Seurat has a few built in methods to identify shared cell states present across different datasets. They can be different conditions, different individuals, technologies, etc. First, Seurat tries to find anchors between pairs of datasets. These represent pairwise correspondences between individual cells (one in each dataset), that Seurat hypothesizes originate from the same biological state. These ‘anchors’ are then used to harmonize the datasets, or transfer information from one dataset to another. In the first part of this workshop, we went over running data integration with SCTransform-normalized datasets from different experiments. In this follow up session, we will go over how you can leverage an integrated reference dataset to annotate new query datasets. This can be helpful for using cell atlases to annotate cell types in your experimental datasets.
+
+We'll work with the `panc8` data.
+
+```{r}
+panc8
+?panc8
+```
+First, lets split the object and run SCTransform
+
+```{r}
+pancreas.list <- SplitObject(panc8, split.by = "tech")
+```
+
+Then we run SCTransform
+```{r}
+#pancreas.list <- lapply(pancreas.list, function(x) {
+#    x <- SCTransform(x,verbose=FALSE,return.only.var.genes = FALSE)}) 
+#saveRDS(pancreas.list, file="/gpfs/data/shared/databases/workshops/bootcamp_2023/scrna_r_workshop/data/pancreas.list.Rds")
+pancreas.list <- readRDS("/gpfs/data/shared/databases/workshops/bootcamp_2023/scrna_r_workshop/data/pancreas.list.Rds")
+
+```
+
+To construct a reference, we will identify ‘anchors’ between the individual datasets. We'll pick three of the objects to construct our integrated reference and save one for using as a query later.  
+```{r}
+#pancreas.ref <- c(pancreas.list$celseq, pancreas.list$celseq2, pancreas.list$smartseq2)
+#pancreas.query <- pancreas.list$fluidigmc1
+#saveRDS(pancreas.ref, file="/gpfs/data/shared/databases/workshops/bootcamp_2023/scrna_r_workshop/data/pancreas.ref.Rds")
+#saveRDS(pancreas.query, file="/gpfs/data/shared/databases/workshops/bootcamp_2023/scrna_r_workshop/data/pancreas.query.Rds")
+
+pancreas.ref <- readRDS("/gpfs/data/shared/databases/workshops/bootcamp_2023/scrna_r_workshop/data/pancreas.ref.Rds")
+pancreas.query <- readRDS("/gpfs/data/shared/databases/workshops/bootcamp_2023/scrna_r_workshop/data/pancreas.query.Rds")
+
+```
+
+Then we can `SelectIntegrationFeatures`, `PrepSCTIntegration`, `FindIntegrationAnchors`, and `IntegrateData`, Run PCA and UMAP
+```{r}
+# integration_features <- SelectIntegrationFeatures(pancreas.ref)
+# saveRDS(integration_features, file="/gpfs/data/shared/databases/workshops/bootcamp_2023/scrna_r_workshop/data/pancreas.integration_features.Rds")
+# 
+# pancreas.ref <- PrepSCTIntegration(object.list = pancreas.ref, anchor.features = integration_features)
+# saveRDS(pancreas.ref, file="/gpfs/data/shared/databases/workshops/bootcamp_2023/scrna_r_workshop/data/pancreas.ref_PrepSCTIntegration.Rds")
+# 
+# ref.anchors <- FindIntegrationAnchors(object.list = pancreas.ref , normalization.method = "SCT", anchor.features = integration_features)
+# saveRDS(ref.anchors, file="/gpfs/data/shared/databases/workshops/bootcamp_2023/scrna_r_workshop/data/pancreas.ref.anchors.Rds")
+# 
+# pancreas.ref <- IntegrateData(anchorset = ref.anchors, normalization.method = "SCT")
+# saveRDS(pancreas.ref, file="/gpfs/data/shared/databases/workshops/bootcamp_2023/scrna_r_workshop/data/pancreas.ref.IntegrateData.Rds")
+
+pancreas.ref <- readRDS("/gpfs/data/shared/databases/workshops/bootcamp_2023/scrna_r_workshop/data/pancreas.ref.IntegrateData.Rds")
+
+pancreas.ref <- RunPCA(pancreas.ref, verbose = FALSE)
+pancreas.ref <- RunUMAP(pancreas.ref, reduction = "pca", dims = 1:20, verbose = FALSE)
+
+p1 <- DimPlot(pancreas.ref, reduction = "umap", split.by = "tech") & coord_fixed(ratio = 1)
+p2 <- DimPlot(pancreas.ref, reduction = "umap", group.by = "celltype", label = TRUE, repel = TRUE) +
+    NoLegend() & coord_fixed(ratio = 1)
+p1 / p2
+```
+
+Seurat supports the projection of reference data onto a query object. While many of the methods are conserved (both procedures begin by identifying anchors), there are two important distinctions between data transfer and integration:
+
+    In data transfer, Seurat does not correct or modify the query expression data.
+    In data transfer, Seurat has an option (set by default) to project the PCA structure of a reference onto the query, instead of learning a joint structure with CCA. We generally suggest using this option when projecting data between scRNA-seq datasets.
+
+After finding anchors, we use the `TransferData()` function to classify the query cells based on reference data (a vector of reference cell type labels). `TransferData()` returns a matrix with predicted IDs and prediction scores, which we can add to the query metadata.
+
+First, FindTransferAnchors between pancreas.ref and pancreas.query.
+```{r}
+#pancreas.anchors <- FindTransferAnchors(reference = pancreas.ref, 
+#                                        query = pancreas.query,
+#                                        dims = 1:20, 
+#                                        reference.reduction = "pca")
+#saveRDS(pancreas.anchors, file="/gpfs/data/shared/databases/workshops/bootcamp_2023/scrna_r_workshop/data/pancreas.anchors.Rds")
+pancreas.anchors <- readRDS("/gpfs/data/shared/databases/workshops/bootcamp_2023/scrna_r_workshop/data/pancreas.anchors.Rds")
+
+```
+
+Classify query cells based on reference data
+```{r}
+#predictions <- TransferData(anchorset = pancreas.anchors, 
+#                            refdata = pancreas.ref$celltype,
+#                            dims = 1:20)
+#saveRDS(predictions, file="/gpfs/data/shared/databases/workshops/bootcamp_2023/scrna_r_workshop/data/pancreas.predictions.Rds")
+predictions <- ("/gpfs/data/shared/databases/workshops/bootcamp_2023/scrna_r_workshop/data/pancreas.predictions.Rds")
+
+```
+
+Add the cell predictions to the pancreas.query metadata
+```{r}
+#pancreas.query <- AddMetaData(pancreas.query, metadata = predictions)
+#saveRDS(pancreas.query, file="/gpfs/data/shared/databases/workshops/bootcamp_2023/scrna_r_workshop/data/pancreas.query_metadata.Rds")
+pancreas.query <- readRDS("/gpfs/data/shared/databases/workshops/bootcamp_2023/scrna_r_workshop/data/pancreas.query_metadata.Rds")
+
+```
+
+Because we have the original label annotations from our full integrated analysis, we can evaluate how well our predicted cell type annotations match the full reference. In this example, we find that there is a high agreement in cell type classification, with over 96% of cells being labeled correctly.
+```{r}
+pancreas.query$prediction.match <- pancreas.query$predicted.id == pancreas.query$celltype
+table(pancreas.query$prediction.match)
+```
+
 
 
 **Thank you!**
