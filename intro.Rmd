@@ -1,3 +1,27 @@
+# To use this notebook
+
+1. Go to ood.ccv.brown.edu (you will need an Oscar account).
+2. Go to 'Clusters' in the blue menu bar at the top and click the drop-down that says '>_OSCAR Shell Access'
+3. Go to your home folder and make a folder called `scrna_r_workshop_2023` (`cd ~` and `mkdir scrna_r_workshop_2023`), then type `pwd` to get the path to this folder.
+4. Look under `Interactive Apps` in the blue menu bar and click on `RStudio on Singularity` under `Expert GUIs`.
+
+Fill in the fields as follows:
+
+`Account`: leave blank         
+`Partition`: leave blank       
+`Number of hours`: 2       
+`Num Cores`: 16       
+`Memory`: 40       
+`Singularity Container Path`: /gpfs/data/shared/databases/workshops/bootcamp_2023/scrna_r_workshop.sif
+`Package install Path`: leave blank                    
+`Path for R Executable`: This should be the full path to the `scrna_r_workshop_2023` you made in step 3. 
+`R Module`: leave blank     
+`Additional Data Path`: /gpfs/data/shared/databases/workshops/bootcamp_2023/scrna_r_workshop    
+
+Once your job starts, click the button to connect to session.     
+At the top of the screen you'll see a menu bar that starts with 'file', click on 'file' and 'open file'.     
+It will ask for a File name -- paste this into the box:      `/gpfs/data/shared/databases/workshops/bootcamp_2023/scrna_r_workshop/intro.Rmd`          
+
 # Introduction to scRNA-seq
 
 **What we will cover**
@@ -680,7 +704,7 @@ Classify query cells based on reference data
 #                            refdata = pancreas.ref$celltype,
 #                            dims = 1:20)
 #saveRDS(predictions, file="/gpfs/data/shared/databases/workshops/bootcamp_2023/scrna_r_workshop/data/pancreas.predictions.Rds")
-predictions <- ("/gpfs/data/shared/databases/workshops/bootcamp_2023/scrna_r_workshop/data/pancreas.predictions.Rds")
+predictions <- readRDS("/gpfs/data/shared/databases/workshops/bootcamp_2023/scrna_r_workshop/data/pancreas.predictions.Rds")
 
 ```
 
@@ -699,18 +723,10 @@ table(pancreas.query$prediction.match)
 ```
 
 
-
 **Thank you!**
-
-Part two of this workshop will cover:
-    - Working with multimodal data
-    - Controlling for Type I error in estimated clusters with clusterpval
-    - Classifying cell types with a reference atlas with TransferAnchors from Seurat    
-    - Gene set enrichment analysis with fgsea
-    - Joint estimation of differential expression and gene set enrichment with iDEA      
     
 - Much of this notebook was adapted from the Seurat vignettes https://satijalab.org/seurat and GitHub repository https://github.com/satijalab/seurat
-- If you have questions you can come by our office hours! All are welcome and starting next week, we will host them on Tuesdays from 10-11:30 and Wednesdays from 2:30-4.
+- If you have questions you can come by our office hours! We host them on Tuesdays from 10-11 and Wednesdays from 3-4 -- for more details see https://events.brown.edu/ccv/all
 
 
 
