@@ -9,7 +9,7 @@ Fill in the fields as follows:
 
 `Account`: leave blank         
 `Partition`: leave blank       
-`Number of hours`: 2       
+`Number of hours`: 3       
 `Num Cores`: 16       
 `Memory`: 40       
 `Singularity Container Path`: /gpfs/data/shared/databases/workshops/bootcamp_2023/scrna_r_workshop.sif
